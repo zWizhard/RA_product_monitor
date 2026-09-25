@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RA Product Monitor — Dashboard</title>
+<style>
+  :root {
+    --bg: #10141a; --panel: #181e27; --line: #27303d; --text: #e6ebf2;
+    --muted: #97a3b6; --accent: #4c9be8; --strong: #2f6fb3; --warn: #d9a13b;
+    --bad: #d9614b; --ok: #4fae7c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 system-ui, "Segoe UI", sans-serif;
+  }
+  header { padding: 20px 24px 8px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
+  .sub { color: var(--muted); font-size: 13px; max-width: 70ch; }
+  main { padding: 8px 24px 48px; display: grid; gap: 16px; }
+  form.filters {
+    display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+  }
+  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  select, input, button {
+    background: #0e1319; color: var(--text); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 14px;
+  }
+  button { cursor: pointer; background: var(--strong); border-color: var(--strong); }
+  button.ghost { background: transparent; border-color: var(--line); }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px;
+    overflow-x: auto;
+  }
+  .panel.wide { grid-column: 1 / -1; }
+  .big { font-size: 28px; font-weight: 600; }
+  dl { margin: 8px 0 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .bar { height: 8px; background: var(--accent); border-radius: 2px; min-width: 2px; }
+  .state { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .state.error { color: var(--bad); }
+  .tag {
+    display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 10px;
+    border: 1px solid var(--line);
+  }
+  .tag.up { color: var(--bad); border-color: var(--bad); }
+  .tag.down { color: var(--ok); border-color: var(--ok); }
+  .tag.flat { color: var(--muted); }
+  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 8px; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+  .chart { width: 100%; height: auto; display: block; overflow: visible; }
+  .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>RA Product Monitor — Dashboard</h1>
+  <p class="sub">
+    Todas as métricas são contadas pelo banco. O recorte de datas incide sobre a data de
+    publicação da reclamação; em buscas, sobre a data de execução. Reclamação sem data
+    legível na fonte não entra nas séries temporais e é contada à parte.
+  </p>
+</header>
+
+<main>
+  <form class="filters" id="filters">
+    <label>Produto
+      <select name="product_id" id="f-product"><option value="">todos</option></select>
+    </label>
+    <label>Categoria
+      <select name="category" id="f-category"><option value="">todas</option></select>
+    </label>
+    <label>Subcategoria
+      <select name="subcategory" id="f-subcategory"><option value="">todas</option></select>
+    </label>
+    <label>De <input type="date" name="date_from" id="f-from"></label>
+    <label>Até <input type="date" name="date_to" id="f-to"></label>
+    <label>Passo
+      <select name="granularity" id="f-granularity">
+        <option value="month">mês</option>
+        <option value="week">semana</option>
+        <option value="day">dia</option>
+      </select>
+    </label>
+    <label>Janela (dias)
+      <select name="days" id="f-days">
+        <option value="30">30</option>
+        <option value="90" selected>90</option>
+        <option value="180">180</option>
+        <option value="365">365</option>
+      </select>
+    </label>
+    <button type="submit">Aplicar</button>
+    <button type="button" class="ghost" id="reset">Limpar</button>
+  </form>
+
+  <section class="cards" id="cards">
+    <div class="state" id="cards-state">Carregando…</div>
+  </section>
+
+  <section class="panel">
+    <div class="row">
+      <h2>Variação contra o período anterior</h2>
+      <span id="trend-tag"></span>
+    </div>
+    <div id="trend"><div class="state">Carregando…</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Evolução temporal</h2>
+    <div id="timeline"><div class="state">Carregando…</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Produtos mais citados</h2>
+    <div id="top"><div class="state">Carregando…</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Reclamações por situação na fonte</h2>
+    <div id="status"><div class="state">Carregando…</div></div>
+  </section>
+</main>
+
+<script>
+"use strict";
+// Nenhuma regra de negócio aqui: a página só exibe campos que a API devolve.
+// Todo texto vindo do banco entra por textContent, nunca por innerHTML.
+
+const FILTER_KEYS = ["product_id", "category", "subcategory", "date_from", "date_to"];
+const VIEW_KEYS = ["granularity", "days"];
+// Parâmetro da API -> campo do formulário.
+const FIELDS = {
+  product_id: "f-product", category: "f-category", subcategory: "f-subcategory",
+  date_from: "f-from", date_to: "f-to", granularity: "f-granularity", days: "f-days",
+};
+
+function el(tag, text) {
+  const node = document.createElement(tag);
+  if (text !== undefined && text !== null) node.textContent = String(text);
+  return node;
+}
+
+function svg(tag, attrs) {
+  const node = document.createElementNS("http://www.w3.org/2000/svg", tag);
+  for (const [key, value] of Object.entries(attrs || {})) node.setAttribute(key, value);
+  return node;
+}
+
+function headRow(columns) {
+  const thead = el("thead");
+  const row = el("tr");
+  for (const [label, cls] of columns) {
+    const th = el("th", label);
+    th.className = cls;
+    row.append(th);
+  }
+  thead.append(row);
+  return thead;
+}
+
+function show(container, node) {
+  container.replaceChildren(node);
+}
+
+function stateNode(message, isError) {
+  const node = el("div", message);
+  node.className = isError ? "state error" : "state";
+  return node;
+}
+
+function num(value) {
+  return value === null || value === undefined ? "—" : value.toLocaleString("pt-BR");
+}
+
+function pct(value) {
+  if (value === null || value === undefined) return "—";
+  return `${value > 0 ? "+" : ""}${value.toLocaleString("pt-BR")}%`;
+}
+
+function isoDate(value) {
+  if (!value) return "—";
+  const [y, m, d] = value.slice(0, 10).split("-");
+  return `${d}/${m}/${y}`;
+}
+
+function isoMoment(value) {
+  if (!value) return "—";
+  return `${isoDate(value)} ${value.slice(11, 16)}`;
+}
+
+function bucketLabel(value, granularity) {
+  const [y, m, d] = value.split("-");
+  if (granularity === "month") return `${m}/${y}`;
+  return `${d}/${m}`;
+}
+
+// ------------------------------------------------------------------ estado da tela
+
+function currentParams() {
+  const form = document.getElementById("filters");
+  const data = new FormData(form);
+  const params = new URLSearchParams();
+  for (const key of [...FILTER_KEYS, ...VIEW_KEYS]) {
+    const value = (data.get(key) || "").trim();
+    if (value) params.set(key, value);
+  }
+  return params;
+}
+
+function scopeParams(params) {
+  const scoped = new URLSearchParams(params);
+  for (const key of VIEW_KEYS) scoped.delete(key);
+  return scoped;
+}
+
+function applyParamsToForm(params) {
+  for (const [key, id] of Object.entries(FIELDS)) {
+    if (params.has(key)) document.getElementById(id).value = params.get(key);
+  }
+}
+
+async function get(path, params) {
+  const query = params && params.toString() ? `?${params}` : "";
+  const response = await fetch(path + query);
+  if (!response.ok) {
+    let detail = `${response.status}`;
+    try {
+      const body = await response.json();
+      if (body && body.detail) detail = typeof body.detail === "string" ? body.detail : detail;
+    } catch (error) {
+      detail = `${response.status}`;
+    }
+    throw new Error(`${path}: ${detail}`);
+  }
+  return response.json();
+}
+
+// ------------------------------------------------------------------------- painéis
+
+function card(title, value, rows) {
+  const panel = el("div");
+  panel.className = "panel";
+  panel.append(el("h2", title));
+  panel.append(Object.assign(el("div", num(value)), { className: "big" }));
+  const list = el("dl");
+  for (const [label, text] of rows) {
+    list.append(el("dt", label));
+    list.append(el("dd", text));
+  }
+  panel.append(list);
+  return panel;
+}
+
+function renderOverview(overview) {
+  renderCards(overview);
+  renderCategories(overview.products.by_category);
+  renderStatus(overview.complaints.by_status);
+}
+
+function renderCards(overview) {
+  const container = document.getElementById("cards");
+  const p = overview.products;
+  const c = overview.complaints;
+  const m = overview.matches;
+  const s = overview.searches;
+  container.replaceChildren(
+    card("Produtos monitorados", p.total, [
+      ["ativos", num(p.active)],
+      ["inativos", num(p.total - p.active)],
+      ["pares categoria/subcategoria", num(p.by_category.length)],
+    ]),
+    card("Reclamações coletadas", c.total, [
+      ["com produto associado", num(c.linked)],
+      ["sem data na fonte", num(c.undated)],
+      ["publicação mais antiga", isoDate(c.first_published)],
+      ["publicação mais recente", isoDate(c.last_published)],
+      ["última coleta", isoMoment(c.last_collected)],
+    ]),
+    card("Correspondências vigentes", m.current, [
+      ["confirmadas", num(m.confirmed)],
+      ["possíveis", num(m.possible)],
+      ["descartadas", num(m.discarded)],
+      ["obsoletas (sem evidência)", num(m.stale)],
+    ]),
+    card("Pendências humanas", m.pending, [
+      ["já revisadas", num(m.reviewed)],
+      ["total de pares", num(m.total)],
+    ]),
+    card("Buscas executadas", s.runs, [
+      ["concluídas", num(s.completed)],
+      ["falhas", num(s.failed)],
+      ["reclamações inseridas", num(s.inserted)],
+      ["última execução", isoMoment(s.last_run_at)],
+    ]),
+  );
+}
+
+function renderCategories(rows) {
+  const container = document.getElementById("cards");
+  if (!rows.length) return;
+  const panel = el("div");
+  panel.className = "panel wide";
+  panel.append(el("h2", "Produtos por categoria"));
+  const table = el("table");
+  table.append(headRow([["categoria", ""], ["subcategoria", ""], ["total", "num"], ["ativos", "num"]]));
+  const body = el("tbody");
+  for (const row of rows) {
+    const tr = el("tr");
+    tr.append(el("td", row.category));
+    tr.append(el("td", row.subcategory || "—"));
+    tr.append(Object.assign(el("td", num(row.total)), { className: "num" }));
+    tr.append(Object.assign(el("td", num(row.active)), { className: "num" }));
+    body.append(tr);
+  }
+  table.append(body);
+  panel.append(table);
+  container.append(panel);
+}
+
+function renderStatus(rows) {
+  const container = document.getElementById("status");
+  if (!rows.length) {
+    show(container, stateNode("Nenhuma reclamação no recorte."));
+    return;
+  }
+  const total = rows.reduce((sum, row) => sum + row.complaints, 0);
+  const table = el("table");
+  const body = el("tbody");
+  for (const row of rows) {
+    const tr = el("tr");
+    tr.append(el("td", row.status || "sem situação informada"));
+    tr.append(Object.assign(el("td", num(row.complaints)), { className: "num" }));
+    const cell = el("td");
+    const bar = el("div");
+    bar.className = "bar";
+    bar.style.width = `${Math.round((100 * row.complaints) / total)}%`;
+    cell.append(bar);
+    tr.append(cell);
+    body.append(tr);
+  }
+  table.append(body);
+  show(container, table);
+}
+
+function renderTop(rows) {
+  const container = document.getElementById("top");
+  if (!rows.length) {
+    show(container, stateNode("Nenhum produto com correspondência vigente no recorte."));
+    return;
+  }
+  const max = Math.max(...rows.map((row) => row.complaints));
+  const table = el("table");
+  table.append(headRow([
+    ["produto", ""], ["marca", ""], ["subcategoria", ""],
+    ["reclamações", "num"], ["confirmadas", "num"], ["possíveis", "num"],
+    ["pendentes", "num"], ["", ""],
+  ]));
+  const body = el("tbody");
+  for (const row of rows) {
+    const tr = el("tr");
+    tr.append(el("td", row.name));
+    tr.append(el("td", row.brand || "—"));
+    tr.append(el("td", row.subcategory || row.category));
+    for (const value of [row.complaints, row.confirmed, row.possible, row.pending]) {
+      tr.append(Object.assign(el("td", num(value)), { className: "num" }));
+    }
+    const cell = el("td");
+    const bar = el("div");
+    bar.className = "bar";
+    bar.style.width = `${Math.round((100 * row.complaints) / max)}%`;
+    cell.append(bar);
+    tr.append(cell);
+    body.append(tr);
+  }
+  table.append(body);
+  show(container, table);
+}
+
+function renderTimeline(timeline) {
+  const container = document.getElementById("timeline");
+  const buckets = timeline.buckets;
+  if (!buckets.length) {
+    const empty = el("div");
+    empty.append(stateNode("Nenhuma reclamação com data de publicação no recorte."));
+    if (timeline.undated) {
+      empty.append(Object.assign(
+        el("div", `${num(timeline.undated)} reclamação(ões) sem data na fonte, fora da série.`),
+        { className: "note" },
+      ));
+    }
+    show(container, empty);
+    return;
+  }
+  const width = 900;
+  const height = 240;
+  const pad = { top: 12, right: 12, bottom: 28, left: 40 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const max = Math.max(...buckets.map((b) => b.complaints), 1);
+  const slot = plotW / buckets.length;
+  const barW = Math.max(1, Math.min(slot * 0.7, 40));
+  const chart = svg("svg", {
+    class: "chart", viewBox: `0 0 ${width} ${height}`, role: "img",
+    "aria-label": "Reclamações por período",
+  });
+  // Eixo e escala: três marcas, sempre inteiras.
+  for (let i = 0; i <= 2; i += 1) {
+    const value = Math.round((max * (2 - i)) / 2);
+    const y = pad.top + (plotH * i) / 2;
+    chart.append(svg("line", {
+      x1: pad.left, x2: width - pad.right, y1: y, y2: y, stroke: "#27303d",
+    }));
+    const label = svg("text", { x: pad.left - 8, y: y + 4, "text-anchor": "end", fill: "#97a3b6", "font-size": "11" });
+    label.textContent = value.toLocaleString("pt-BR");
+    chart.append(label);
+  }
+  const every = Math.ceil(buckets.length / 12);
+  buckets.forEach((bucket, index) => {
+    const x = pad.left + slot * index + (slot - barW) / 2;
+    const h = (plotH * bucket.complaints) / max;
+    const hc = (plotH * bucket.confirmed) / max;
+    if (bucket.complaints > 0) {
+      chart.append(svg("rect", {
+        x, y: pad.top + plotH - h, width: barW, height: h, fill: "#4c9be8", rx: 2,
+      }));
+    }
+    if (bucket.confirmed > 0) {
+      chart.append(svg("rect", {
+        x, y: pad.top + plotH - hc, width: barW, height: hc, fill: "#2f6fb3", rx: 2,
+      }));
+    }
+    const last = buckets.length - 1;
+    const fits = index === last && last % every >= Math.ceil(every / 2);
+    if (index % every === 0 || fits) {
+      const label = svg("text", {
+        x: x + barW / 2, y: height - 10, "text-anchor": "middle", fill: "#97a3b6",
+        "font-size": "11",
+      });
+      label.textContent = bucketLabel(bucket.period_start, timeline.granularity);
+      chart.append(label);
+    }
+  });
+  const wrap = el("div");
+  wrap.append(chart);
+  const legend = el("div");
+  legend.className = "legend";
+  for (const [color, text] of [["#4c9be8", "reclamações no escopo"], ["#2f6fb3", "com correspondência confirmada"]]) {
+    const item = el("span");
+    const swatch = el("span");
+    swatch.className = "swatch";
+    swatch.style.background = color;
+    item.append(swatch, document.createTextNode(text));
+    legend.append(item);
+  }
+  wrap.append(legend);
+  const note = el("div", `Passo: ${timeline.granularity}. Sem data na fonte, fora da série: ${num(timeline.undated)}.`);
+  note.className = "note";
+  wrap.append(note);
+  show(container, wrap);
+}
+
+function renderTrend(trend) {
+  const container = document.getElementById("trend");
+  const tag = document.getElementById("trend-tag");
+  tag.className = "tag";
+  if (trend.direction === "alta") tag.classList.add("up");
+  else if (trend.direction === "queda") tag.classList.add("down");
+  else tag.classList.add("flat");
+  if (trend.direction) tag.textContent = trend.direction;
+  else if (!trend.comparable) tag.textContent = "não comparável";
+  else tag.textContent = "sem tendência estatística";
+
+  const wrap = el("div");
+  const list = el("dl");
+  const rows = [
+    [`janela atual (${isoDate(trend.current.start)} a ${isoDate(trend.current.end)})`, num(trend.current.complaints)],
+    [`janela anterior (${isoDate(trend.previous.start)} a ${isoDate(trend.previous.end)})`, num(trend.previous.complaints)],
+    ["diferença", `${trend.delta > 0 ? "+" : ""}${num(trend.delta)}`],
+    ["variação relativa", pct(trend.delta_pct)],
+    ["p-valor", trend.p_value === 0 ? "< 0,000001" : trend.p_value.toLocaleString("pt-BR")],
+    ["janelas de", `${num(trend.days)} dias`],
+    ["buscas na janela atual", num(trend.current.searches)],
+    ["buscas na janela anterior", num(trend.previous.searches)],
+  ];
+  for (const [label, value] of rows) {
+    list.append(el("dt", label));
+    list.append(el("dd", value));
+  }
+  wrap.append(list);
+  if (trend.note) {
+    wrap.append(Object.assign(el("div", trend.note), { className: "note" }));
+  }
+  wrap.append(Object.assign(el("div", trend.basis), { className: "note" }));
+  show(container, wrap);
+}
+
+// -------------------------------------------------------------------- carregamento
+
+async function loadOptions() {
+  const [overview, products] = await Promise.all([
+    get("/dashboard/overview", new URLSearchParams()),
+    get("/products", new URLSearchParams({ limit: "500" })),
+  ]);
+  const productSelect = document.getElementById("f-product");
+  for (const product of products) {
+    const option = el("option", product.brand ? `${product.name} — ${product.brand}` : product.name);
+    option.value = product.id;
+    productSelect.append(option);
+  }
+  const categories = [...new Set(overview.products.by_category.map((row) => row.category))];
+  const categorySelect = document.getElementById("f-category");
+  for (const category of categories) {
+    const option = el("option", category);
+    option.value = category;
+    categorySelect.append(option);
+  }
+  const subcategories = [...new Set(
+    overview.products.by_category.map((row) => row.subcategory).filter(Boolean),
+  )];
+  const subSelect = document.getElementById("f-subcategory");
+  for (const subcategory of subcategories) {
+    const option = el("option", subcategory);
+    option.value = subcategory;
+    subSelect.append(option);
+  }
+}
+
+async function loadOverview(cards, scope) {
+  const status = document.getElementById("status");
+  show(cards, stateNode("Carregando…"));
+  show(status, stateNode("Carregando…"));
+  try {
+    renderOverview(await get("/dashboard/overview", scope));
+  } catch (error) {
+    show(cards, stateNode(error.message, true));
+    show(status, stateNode(error.message, true));
+  }
+}
+
+async function loadPanel(container, fetcher, render) {
+  show(container, stateNode("Carregando…"));
+  try {
+    render(await fetcher());
+  } catch (error) {
+    show(container, stateNode(error.message, true));
+  }
+}
+
+async function loadAll() {
+  const params = currentParams();
+  history.replaceState(null, "", params.toString() ? `?${params}` : location.pathname);
+  const scope = scopeParams(params);
+  const granularity = params.get("granularity") || "month";
+  const days = params.get("days") || "90";
+
+  const cards = document.getElementById("cards");
+  const trendParams = new URLSearchParams(scope);
+  trendParams.set("days", days);
+  const timelineParams = new URLSearchParams(scope);
+  timelineParams.set("granularity", granularity);
+
+  await Promise.all([
+    loadOverview(cards, scope),
+    loadPanel(document.getElementById("trend"), () => get("/dashboard/trend", trendParams), renderTrend),
+    loadPanel(
+      document.getElementById("timeline"),
+      () => get("/dashboard/timeline", timelineParams),
+      renderTimeline,
+    ),
+    loadPanel(
+      document.getElementById("top"),
+      () => get("/dashboard/top-products", new URLSearchParams([...scope, ["limit", "10"]])),
+      renderTop,
+    ),
+  ]);
+}
+
+document.getElementById("filters").addEventListener("submit", (event) => {
+  event.preventDefault();
+  loadAll();
+});
+
+document.getElementById("reset").addEventListener("click", () => {
+  document.getElementById("filters").reset();
+  loadAll();
+});
+
+(async function start() {
+  try {
+    await loadOptions();
+  } catch (error) {
+    show(document.getElementById("cards"), stateNode(error.message, true));
+  }
+  applyParamsToForm(new URLSearchParams(location.search));
+  await loadAll();
+})();
+</script>
+</body>
+</html>
