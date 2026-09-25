@@ -14,6 +14,12 @@ Escopo inicial:
 
 O projeto usa o antigo RA Intelligence apenas como base técnica. Este é um novo sistema; não preserve legado apenas por compatibilidade.
 
+## Fase atual: manutenção
+
+O projeto está em fase de manutenção. As regras de continuidade abaixo prevalecem sobre o restante deste arquivo em caso de conflito:
+
+@continuidade.md
+
 ## Princípios de trabalho
 
 1. Investigue o código relevante antes de afirmar como ele funciona.
