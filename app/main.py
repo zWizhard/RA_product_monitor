@@ -11,7 +11,7 @@ from app.collector import ReclameAquiCollector
 from app.config import get_settings
 from app.db import SCHEMA_VERSION, Database
 from app.repository import DuplicateProduct, RecordNotFound
-from app.routers import complaints, dashboard, matches, products, searches
+from app.routers import complaints, dashboard, matches, products, research, searches
 from app.taxonomy import InvalidTaxonomy
 
 
@@ -102,6 +102,7 @@ def create_app() -> FastAPI:
     app.include_router(complaints.router)
     app.include_router(matches.router)
     app.include_router(dashboard.router)
+    app.include_router(research.router)
     return app
 
 

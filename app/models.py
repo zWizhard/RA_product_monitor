@@ -424,6 +424,54 @@ class MatchReview(BaseModel):
         return _blank_to_none(value)
 
 
+# ------------------------------------------------------------------- pesquisa
+
+
+class ResearchArea(BaseModel):
+    """Área que a pesquisa livre sabe etiquetar (ver `app.relevance`)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    key: str
+    label: str
+    category: Category
+    category_label: str
+
+
+class ResearchItem(BaseModel):
+    """Reclamação como coletada, com a etiqueta de relevância e as palavras que a decidiram."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    complaint: Complaint
+    relevance: str
+    area: str | None
+    context_terms: list[str]
+    off_topic_terms: list[str]
+    adverse_signals: list[str]
+
+
+class ResearchResult(BaseModel):
+    """Resultado da pesquisa livre. Nada é escondido: a etiqueta só ordena."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    term: str | None
+    category: Category | None
+    area: str | None
+    date_from: date | None
+    date_to: date | None
+    rules_version: str
+    # `total`, `counts` e `adverse` contam tudo o que foi etiquetado; `items` traz até
+    # `limit`, já ordenados, e `truncated` avisa quando ficou algo de fora.
+    total: int
+    counts: dict[str, int]
+    adverse: int
+    undated_excluded: int
+    truncated: bool
+    items: list[ResearchItem]
+
+
 # ------------------------------------------------------------------ dashboard
 
 

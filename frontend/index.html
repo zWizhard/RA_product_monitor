@@ -3,76 +3,362 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>RA Product Monitor — Dashboard</title>
+<title>RA Product Monitor</title>
 <style>
   :root {
-    --bg: #10141a; --panel: #181e27; --line: #27303d; --text: #e6ebf2;
-    --muted: #97a3b6; --accent: #4c9be8; --strong: #2f6fb3; --warn: #d9a13b;
-    --bad: #d9614b; --ok: #4fae7c;
+    color-scheme: light;
+    --bg: #f4f6fb; --panel: #ffffff; --panel-2: #f8fafc; --line: #e3e8f0; --line-2: #eef1f6;
+    --text: #0f172a; --muted: #64748b; --accent: #3056e6; --accent-hover: #2446c9;
+    --accent-soft: rgba(48, 86, 230, 0.10); --on-accent: #ffffff; --chart-1: #b9c9fb; --chart-2: #3056e6;
+    --warn: #c47a06; --bad: #d43d3d; --ok: #0f9a6b;
+    --shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 4px 16px rgba(15, 23, 42, 0.05);
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #0a0e16; --panel: #121826; --panel-2: #0e1420; --line: #232c3d; --line-2: #1a2231;
+      --text: #e7ecf5; --muted: #8b97ad; --accent: #6f8dff; --accent-hover: #8aa2ff;
+      --accent-soft: rgba(111, 141, 255, 0.14); --on-accent: #0a0e16; --chart-1: #2f3f6e; --chart-2: #7c98ff;
+      --warn: #e5a53a; --bad: #f06a5d; --ok: #3cc98f;
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px rgba(0, 0, 0, 0.25);
+    }
   }
   * { box-sizing: border-box; }
   body {
     margin: 0; background: var(--bg); color: var(--text);
-    font: 15px/1.45 system-ui, "Segoe UI", sans-serif;
+    font: 15px/1.5 "Inter", system-ui, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
   }
-  header { padding: 20px 24px 8px; }
-  h1 { font-size: 20px; margin: 0 0 4px; }
-  h2 { font-size: 15px; margin: 0 0 12px; font-weight: 600; }
-  .sub { color: var(--muted); font-size: 13px; max-width: 70ch; }
-  main { padding: 8px 24px 48px; display: grid; gap: 16px; }
+  ::selection { background: var(--accent-soft); }
+
+  /* ---------------------------------------------------------------- cabeçalho */
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: color-mix(in srgb, var(--panel) 82%, transparent);
+    backdrop-filter: saturate(160%) blur(12px); -webkit-backdrop-filter: saturate(160%) blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar {
+    max-width: 1280px; margin: 0 auto; padding: 12px 24px;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), #7a4df0); color: #fff;
+    box-shadow: 0 4px 14px var(--accent-soft);
+  }
+  h1 { font-size: 17px; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  .tagline { display: block; color: var(--muted); font-size: 12px; }
+  h2 { font-size: 15px; margin: 0 0 14px; font-weight: 650; letter-spacing: -0.005em; }
+
+  .tabs {
+    display: inline-flex; gap: 2px; padding: 4px; border-radius: 12px;
+    background: var(--panel-2); border: 1px solid var(--line);
+  }
+  button.tab {
+    background: transparent; border: none; color: var(--muted); padding: 0 18px;
+    height: 32px; border-radius: 9px; font-weight: 550;
+  }
+  button.tab:hover { color: var(--text); background: transparent; }
+  button.tab.active { background: var(--panel); color: var(--text); box-shadow: var(--shadow); }
+
+  /* -------------------------------------------------------------------- layout */
+  main {
+    max-width: 1280px; margin: 0 auto; padding: 24px 24px 64px;
+    display: grid; gap: 20px; animation: fade 0.25s ease;
+  }
+  @keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .sub {
+    margin: 0; color: var(--muted); font-size: 13px; max-width: 90ch;
+    padding: 10px 14px; border-left: 3px solid var(--accent); background: var(--accent-soft);
+    border-radius: 0 10px 10px 0;
+  }
+
+  /* ---------------------------------------------------------------- formulários */
   form.filters {
-    display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px;
+    display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 16px; box-shadow: var(--shadow);
   }
-  label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+  form.filters > label { flex: 1 1 150px; max-width: 280px; }
+  form.filters > label.grow { flex: 3 1 260px; max-width: none; }
+  form.filters > label.check { flex: 0 0 auto; }
+  label {
+    display: flex; flex-direction: column; gap: 6px; font-size: 12px; font-weight: 550;
+    color: var(--muted);
+  }
   select, input, button {
-    background: #0e1319; color: var(--text); border: 1px solid var(--line);
-    border-radius: 6px; padding: 6px 8px; font: inherit; font-size: 14px;
+    height: 38px; background: var(--panel-2); color: var(--text); border: 1px solid var(--line);
+    border-radius: 10px; padding: 0 12px; font: inherit; font-size: 14px;
+    transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
   }
-  button { cursor: pointer; background: var(--strong); border-color: var(--strong); }
-  button.ghost { background: transparent; border-color: var(--line); }
+  /* A lista aberta nem sempre segue o tema: sem fundo explícito, texto claro some no branco. */
+  select option { background-color: var(--panel); color: var(--text); }
+  select:hover, input:hover { border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+  select:focus, input:focus, button:focus-visible {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
+  }
+  input[type="checkbox"] { height: 16px; width: 16px; accent-color: var(--accent); padding: 0; }
+  button {
+    cursor: pointer; background: var(--accent); border-color: var(--accent); color: var(--on-accent);
+    font-weight: 600; padding: 0 18px;
+  }
+  button:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  button:disabled { opacity: 0.6; cursor: progress; }
+  button.ghost { background: transparent; border-color: var(--line); color: var(--text); }
+  button.ghost:hover { background: var(--panel-2); border-color: var(--muted); }
+  label.check {
+    flex-direction: row; align-items: center; gap: 8px; font-size: 13px; color: var(--text);
+    height: 38px; cursor: pointer;
+  }
+
+  /* -------------------------------------------------------------------- painéis */
   .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 16px; }
   .panel {
-    background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px;
-    overflow-x: auto;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 18px 20px; overflow-x: auto; box-shadow: var(--shadow);
   }
   .panel.wide { grid-column: 1 / -1; }
-  .big { font-size: 28px; font-weight: 600; }
-  dl { margin: 8px 0 0; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; font-size: 13px; }
-  dt { color: var(--muted); }
-  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); }
-  th { color: var(--muted); font-weight: 500; }
-  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-  .bar { height: 8px; background: var(--accent); border-radius: 2px; min-width: 2px; }
-  .state { color: var(--muted); font-size: 13px; padding: 8px 0; }
-  .state.error { color: var(--bad); }
-  .tag {
-    display: inline-block; font-size: 12px; padding: 2px 8px; border-radius: 10px;
-    border: 1px solid var(--line);
+  .cards > .panel:not(.wide) { position: relative; overflow: hidden; }
+  .cards > .panel:not(.wide)::before {
+    content: ""; position: absolute; inset: 0 0 auto; height: 3px;
+    background: linear-gradient(90deg, var(--accent), #7a4df0);
   }
-  .tag.up { color: var(--bad); border-color: var(--bad); }
-  .tag.down { color: var(--ok); border-color: var(--ok); }
+  .cards > .panel:not(.wide) h2 {
+    font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 0.05em; margin-bottom: 6px;
+  }
+  .big { font-size: 34px; font-weight: 750; letter-spacing: -0.03em; line-height: 1.1; }
+  dl { margin: 12px 0 0; display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; font-size: 13px; }
+  dt { color: var(--muted); }
+  dd { margin: 0; text-align: right; font-variant-numeric: tabular-nums; font-weight: 550; }
+  .cards dl { padding-top: 12px; border-top: 1px dashed var(--line); }
+
+  /* ------------------------------------------------------------------- tabelas */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line-2); }
+  th {
+    color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.05em; background: var(--panel-2); border-bottom-color: var(--line);
+  }
+  th:first-child { border-top-left-radius: 8px; }
+  th:last-child { border-top-right-radius: 8px; }
+  tbody tr { transition: background 0.12s; }
+  tbody tr:hover { background: var(--panel-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td:has(> .bar) { width: 28%; min-width: 120px; }
+  .bar {
+    height: 8px; border-radius: 999px; min-width: 4px;
+    background: linear-gradient(90deg, var(--chart-2), color-mix(in srgb, var(--chart-2) 55%, #7a4df0));
+  }
+
+  /* ----------------------------------------------------------------- estados */
+  .state { color: var(--muted); font-size: 13px; padding: 10px 0; }
+  .state.error {
+    color: var(--bad); padding: 10px 14px; border-radius: 10px;
+    background: color-mix(in srgb, var(--bad) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--bad) 30%, transparent);
+  }
+  #c-state:empty, #p-state:empty { display: none; }
+  #c-state .state:not(.error), #p-state .state:not(.error) {
+    padding: 10px 14px; border-radius: 10px; background: var(--panel);
+    border: 1px solid var(--line); color: var(--text);
+  }
+
+  /* -------------------------------------------------------------------- tags */
+  .tag {
+    display: inline-flex; align-items: center; font-size: 12px; font-weight: 550;
+    padding: 2px 10px; border-radius: 999px; line-height: 20px;
+    color: var(--muted); background: var(--panel-2); border: 1px solid var(--line);
+  }
+  .tag.up, .tag.bad {
+    color: var(--bad); border-color: transparent;
+    background: color-mix(in srgb, var(--bad) 12%, transparent);
+  }
+  .tag.down, .tag.ok {
+    color: var(--ok); border-color: transparent;
+    background: color-mix(in srgb, var(--ok) 12%, transparent);
+  }
+  .tag.warn {
+    color: var(--warn); border-color: transparent;
+    background: color-mix(in srgb, var(--warn) 14%, transparent);
+  }
   .tag.flat { color: var(--muted); }
-  .legend { display: flex; gap: 16px; font-size: 12px; color: var(--muted); margin-top: 8px; }
-  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; }
+
+  /* ------------------------------------------------------------------ gráfico */
+  .legend { display: flex; gap: 18px; font-size: 12px; color: var(--muted); margin-top: 10px; flex-wrap: wrap; }
+  .swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; }
   .chart { width: 100%; height: auto; display: block; overflow: visible; }
+  .chart .grid { stroke: var(--line); stroke-dasharray: 3 4; }
+  .chart .axis { fill: var(--muted); }
+  .chart .all { fill: var(--chart-1); }
+  .chart .confirmed { fill: var(--chart-2); }
   .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-  .note { color: var(--muted); font-size: 12px; margin-top: 8px; }
+  .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  [hidden] { display: none !important; }
+
+  /* --------------------------------------------------------------- reclamações */
+  .item {
+    border: 1px solid var(--line); border-radius: 12px; padding: 14px 16px; margin-top: 10px;
+    background: var(--panel-2); transition: border-color 0.15s;
+  }
+  .item:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+  .item h3 { font-size: 15px; margin: 0 0 4px; font-weight: 600; line-height: 1.35; }
+  .item a { color: var(--text); text-decoration: none; }
+  .item a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+  .meta { color: var(--muted); font-size: 12px; }
+  .tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 4px; }
+  .desc {
+    margin: 8px 0 0; font-size: 13px; white-space: pre-line; cursor: pointer; color: var(--muted);
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .desc:hover { color: var(--text); }
+  .desc.open { display: block; color: var(--text); }
+  details > summary {
+    cursor: pointer; font-weight: 650; font-size: 15px; list-style: none;
+    display: flex; align-items: center; gap: 8px; color: var(--muted);
+  }
+  details > summary::-webkit-details-marker { display: none; }
+  details > summary::before {
+    content: "\203A"; display: inline-block; font-size: 18px; line-height: 1; transition: transform 0.15s;
+  }
+  details[open] > summary { margin-bottom: 4px; color: var(--text); }
+  details[open] > summary::before { transform: rotate(90deg); }
+
+  /* ------------------------------------------------------- coleta e auditoria */
+  form.filters.flat {
+    border: none; box-shadow: none; background: transparent; padding: 16px 0 0;
+  }
+  button.small { height: 30px; padding: 0 12px; font-size: 13px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 12px; }
+  .actions input { flex: 1 1 220px; height: 30px; font-size: 13px; }
+  .evidence {
+    margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--accent);
+    background: var(--panel); border-radius: 0 8px 8px 0; font-size: 13px;
+  }
+  .runs { display: grid; gap: 8px; }
+  .history { margin-top: 10px; }
+  .history:empty { display: none; }
+
+  @media (max-width: 640px) {
+    .topbar, main { padding-left: 16px; padding-right: 16px; }
+    .panel { padding: 16px; }
+    .big { font-size: 28px; }
+  }
 </style>
 </head>
 <body>
 <header>
-  <h1>RA Product Monitor — Dashboard</h1>
+  <div class="topbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 12 7 12 10 5 14 19 17 12 21 12"></polyline>
+        </svg>
+      </span>
+      <div>
+        <h1>RA Product Monitor</h1>
+        <span class="tagline">Reclamações do Reclame Aqui por produto</span>
+      </div>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button type="button" class="tab" role="tab" data-tab="coleta">Busca &amp; coleta</button>
+      <button type="button" class="tab" role="tab" data-tab="reclamacoes">Reclamações</button>
+      <button type="button" class="tab" role="tab" data-tab="dashboard">Dashboard</button>
+      <button type="button" class="tab" role="tab" data-tab="auditoria">Auditoria</button>
+    </nav>
+  </div>
+</header>
+
+<main id="tab-coleta" hidden>
+  <p class="sub">
+    Coleta no Reclame Aqui por termo livre ou pelos termos de busca de um produto cadastrado.
+    Cada termo vira uma busca registrada, e cada reclamação guarda qual busca a encontrou. Com
+    "identificar produtos" marcado, o matching roda sobre o que a coleta trouxe e os
+    candidatos vão para a Auditoria.
+  </p>
+  <form class="filters" id="collect-form">
+    <label class="grow">Termo livre
+      <input id="c-term" maxlength="200" placeholder="ex.: prótese mamária">
+    </label>
+    <label>ou produto cadastrado
+      <select id="c-product"><option value="">—</option></select>
+    </label>
+    <label>Páginas
+      <select id="c-pages">
+        <option>1</option><option>2</option><option selected>3</option><option>5</option>
+        <option>10</option>
+      </select>
+    </label>
+    <label class="check"><input type="checkbox" id="c-match" checked> identificar produtos cadastrados</label>
+    <button type="submit" id="c-submit">Coletar</button>
+  </form>
+  <div id="c-state"></div>
+
+  <section class="panel">
+    <h2>Histórico de buscas</h2>
+    <div id="c-history"><div class="state">Carregando…</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Produtos cadastrados</h2>
+    <div id="p-list-state"></div>
+    <div id="p-list"><div class="state">Carregando…</div></div>
+  </section>
+
+  <details class="panel" id="p-new">
+    <summary>Cadastrar produto</summary>
+    <form class="filters flat" id="product-form">
+      <label class="grow">Nome* <input name="name" required minlength="2" maxlength="200"></label>
+      <label>Categoria* <select name="category" id="p-category" required></select></label>
+      <label>Subcategoria* <select name="subcategory" id="p-subcategory" required></select></label>
+      <label>Marca <input name="brand" maxlength="150"></label>
+      <label>Fabricante <input name="manufacturer" maxlength="200"></label>
+      <label>Modelo <input name="model" maxlength="150"></label>
+      <label>Registro Anvisa <input name="regulatory_id" maxlength="100"></label>
+      <label class="grow">Apelidos (separados por vírgula) <input name="aliases"></label>
+      <label class="grow">Termos de busca (separados por vírgula) <input name="search_terms"></label>
+      <button type="submit">Cadastrar</button>
+    </form>
+    <div id="p-state"></div>
+  </details>
+</main>
+
+<main id="tab-reclamacoes" hidden>
+  <p class="sub">
+    Consulta às reclamações já coletadas; para trazer novas, use Busca &amp; coleta. O termo é
+    opcional: sem ele, entram todas as do período. Categoria e área definem contra o que a
+    etiqueta de relevância é calculada, a partir de listas de palavras (rascunho). Nenhuma
+    reclamação é escondida: as prováveis fora do assunto só ficam recolhidas.
+  </p>
+  <form class="filters" id="research-form">
+    <label class="grow">Termo
+      <input id="r-term" minlength="2" maxlength="200" placeholder="opcional — ex.: silicone">
+    </label>
+    <label>Categoria
+      <select id="r-category"><option value="">todas</option></select>
+    </label>
+    <label>Área
+      <select id="r-area"><option value="">todas (a mais próxima)</option></select>
+    </label>
+    <label>De <input type="date" id="r-from"></label>
+    <label>Até <input type="date" id="r-to"></label>
+    <button type="submit" id="r-submit">Consultar</button>
+    <button type="button" class="ghost" id="r-reset">Limpar</button>
+  </form>
+  <div id="r-results"></div>
+</main>
+
+<main id="tab-dashboard" hidden>
   <p class="sub">
     Todas as métricas são contadas pelo banco. O recorte de datas incide sobre a data de
     publicação da reclamação; em buscas, sobre a data de execução. Reclamação sem data
     legível na fonte não entra nas séries temporais e é contada à parte.
   </p>
-</header>
-
-<main>
   <form class="filters" id="filters">
     <label>Produto
       <select name="product_id" id="f-product"><option value="">todos</option></select>
@@ -130,6 +416,29 @@
     <h2>Reclamações por situação na fonte</h2>
     <div id="status"><div class="state">Carregando…</div></div>
   </section>
+</main>
+
+<main id="tab-auditoria" hidden>
+  <p class="sub">
+    Candidatos produto ↔ reclamação encontrados pelo matching, do score mais alto para o mais
+    baixo. A decisão humana prevalece sobre a automática e é mantida em reprocessamentos; a
+    evidência original nunca é alterada. O histórico mostra o que versões anteriores do motor
+    decidiram sobre o mesmo par.
+  </p>
+  <form class="filters" id="audit-form">
+    <label>Situação
+      <select id="a-scope">
+        <option value="pending">pendentes</option>
+        <option value="decided">já decididos</option>
+        <option value="all">todos</option>
+      </select>
+    </label>
+    <label>Produto <select id="a-product"><option value="">todos</option></select></label>
+    <label>Categoria <select id="a-category"><option value="">todas</option></select></label>
+    <label>Revisor* <input id="a-reviewer" minlength="2" maxlength="150" placeholder="seu nome"></label>
+    <button type="submit">Aplicar</button>
+  </form>
+  <div id="a-results"></div>
 </main>
 
 <script>
@@ -232,12 +541,27 @@ function applyParamsToForm(params) {
 
 async function get(path, params) {
   const query = params && params.toString() ? `?${params}` : "";
-  const response = await fetch(path + query);
+  return readJson(path, await fetch(path + query));
+}
+
+async function post(path, body) {
+  const response = await fetch(path, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body || {}),
+  });
+  return readJson(path, response);
+}
+
+async function readJson(path, response) {
   if (!response.ok) {
     let detail = `${response.status}`;
     try {
       const body = await response.json();
-      if (body && body.detail) detail = typeof body.detail === "string" ? body.detail : detail;
+      if (body && typeof body.detail === "string") detail = body.detail;
+      // Erro de validação do FastAPI: lista de {loc, msg}.
+      else if (body && Array.isArray(body.detail)) {
+        detail = body.detail.map((item) => `${(item.loc || []).slice(-1)[0] || ""}: ${item.msg}`).join("; ");
+      }
     } catch (error) {
       detail = `${response.status}`;
     }
@@ -317,8 +641,8 @@ function renderCategories(rows) {
   const body = el("tbody");
   for (const row of rows) {
     const tr = el("tr");
-    tr.append(el("td", row.category));
-    tr.append(el("td", row.subcategory || "—"));
+    tr.append(el("td", categoryLabel(row.category)));
+    tr.append(el("td", row.subcategory ? areaLabel(row.subcategory) : "—"));
     tr.append(Object.assign(el("td", num(row.total)), { className: "num" }));
     tr.append(Object.assign(el("td", num(row.active)), { className: "num" }));
     body.append(tr);
@@ -419,9 +743,9 @@ function renderTimeline(timeline) {
     const value = Math.round((max * (2 - i)) / 2);
     const y = pad.top + (plotH * i) / 2;
     chart.append(svg("line", {
-      x1: pad.left, x2: width - pad.right, y1: y, y2: y, stroke: "#27303d",
+      x1: pad.left, x2: width - pad.right, y1: y, y2: y, class: "grid",
     }));
-    const label = svg("text", { x: pad.left - 8, y: y + 4, "text-anchor": "end", fill: "#97a3b6", "font-size": "11" });
+    const label = svg("text", { x: pad.left - 8, y: y + 4, "text-anchor": "end", class: "axis", "font-size": "11" });
     label.textContent = value.toLocaleString("pt-BR");
     chart.append(label);
   }
@@ -432,19 +756,19 @@ function renderTimeline(timeline) {
     const hc = (plotH * bucket.confirmed) / max;
     if (bucket.complaints > 0) {
       chart.append(svg("rect", {
-        x, y: pad.top + plotH - h, width: barW, height: h, fill: "#4c9be8", rx: 2,
+        x, y: pad.top + plotH - h, width: barW, height: h, class: "all", rx: 3,
       }));
     }
     if (bucket.confirmed > 0) {
       chart.append(svg("rect", {
-        x, y: pad.top + plotH - hc, width: barW, height: hc, fill: "#2f6fb3", rx: 2,
+        x, y: pad.top + plotH - hc, width: barW, height: hc, class: "confirmed", rx: 3,
       }));
     }
     const last = buckets.length - 1;
     const fits = index === last && last % every >= Math.ceil(every / 2);
     if (index % every === 0 || fits) {
       const label = svg("text", {
-        x: x + barW / 2, y: height - 10, "text-anchor": "middle", fill: "#97a3b6",
+        x: x + barW / 2, y: height - 10, "text-anchor": "middle", class: "axis",
         "font-size": "11",
       });
       label.textContent = bucketLabel(bucket.period_start, timeline.granularity);
@@ -455,7 +779,7 @@ function renderTimeline(timeline) {
   wrap.append(chart);
   const legend = el("div");
   legend.className = "legend";
-  for (const [color, text] of [["#4c9be8", "reclamações no escopo"], ["#2f6fb3", "com correspondência confirmada"]]) {
+  for (const [color, text] of [["var(--chart-1)", "reclamações no escopo"], ["var(--chart-2)", "com correspondência confirmada"]]) {
     const item = el("span");
     const swatch = el("span");
     swatch.className = "swatch";
@@ -507,34 +831,17 @@ function renderTrend(trend) {
 
 // -------------------------------------------------------------------- carregamento
 
-async function loadOptions() {
-  const [overview, products] = await Promise.all([
-    get("/dashboard/overview", new URLSearchParams()),
-    get("/products", new URLSearchParams({ limit: "500" })),
-  ]);
-  const productSelect = document.getElementById("f-product");
-  for (const product of products) {
-    const option = el("option", product.brand ? `${product.name} — ${product.brand}` : product.name);
-    option.value = product.id;
-    productSelect.append(option);
-  }
-  const categories = [...new Set(overview.products.by_category.map((row) => row.category))];
-  const categorySelect = document.getElementById("f-category");
-  for (const category of categories) {
-    const option = el("option", category);
-    option.value = category;
-    categorySelect.append(option);
-  }
-  const subcategories = [...new Set(
-    overview.products.by_category.map((row) => row.subcategory).filter(Boolean),
-  )];
-  const subSelect = document.getElementById("f-subcategory");
-  for (const subcategory of subcategories) {
-    const option = el("option", subcategory);
-    option.value = subcategory;
-    subSelect.append(option);
-  }
+// Produtos do filtro vêm de `loadProducts`, que recarrega a lista depois de cadastro.
+// Categorias e subcategorias vêm da taxonomia inteira, com nome legível — não só as
+// que já têm produto cadastrado.
+function loadOptions() {
+  refillSelect("f-category", categoryOptions(), "todas");
+  refillSelect("f-subcategory", areaOptions(document.getElementById("f-category").value), "todas");
 }
+
+document.getElementById("f-category").addEventListener("change", (event) => {
+  refillSelect("f-subcategory", areaOptions(event.target.value), "todas");
+});
 
 async function loadOverview(cards, scope) {
   const status = document.getElementById("status");
@@ -559,7 +866,9 @@ async function loadPanel(container, fetcher, render) {
 
 async function loadAll() {
   const params = currentParams();
-  history.replaceState(null, "", params.toString() ? `?${params}` : location.pathname);
+  history.replaceState(
+    null, "", (params.toString() ? `?${params}` : location.pathname) + location.hash,
+  );
   const scope = scopeParams(params);
   const granularity = params.get("granularity") || "month";
   const days = params.get("days") || "90";
@@ -596,14 +905,694 @@ document.getElementById("reset").addEventListener("click", () => {
   loadAll();
 });
 
-(async function start() {
-  try {
-    await loadOptions();
-  } catch (error) {
-    show(document.getElementById("cards"), stateNode(error.message, true));
+// ------------------------------------------------------------------------- pesquisa
+
+const RELEVANCE_GROUPS = [
+  ["relevante", "Relevantes"],
+  ["duvidosa", "Duvidosas"],
+  ["fora_do_assunto", "Provavelmente fora do assunto"],
+];
+
+function tagNode(text, cls) {
+  const node = el("span", text);
+  node.className = `tag ${cls}`;
+  return node;
+}
+
+function complaintNode(item) {
+  const c = item.complaint;
+  const node = el("article");
+  node.className = "item";
+  const title = el("h3");
+  title.append(sourceLink(c.url, c.title));
+  node.append(title);
+  const published = c.published_at ? isoDate(c.published_at) : (c.published_text || "sem data");
+  node.append(Object.assign(
+    el("div", [c.company, published, c.status, c.location].filter(Boolean).join(" · ")),
+    { className: "meta" },
+  ));
+  const tags = el("div");
+  tags.className = "tags";
+  for (const term of item.adverse_signals) tags.append(tagNode(`sinal: ${term}`, "bad"));
+  for (const term of item.context_terms) tags.append(tagNode(term, "ok"));
+  for (const term of item.off_topic_terms) tags.append(tagNode(`outro assunto: ${term}`, "warn"));
+  if (tags.childElementCount) node.append(tags);
+  if (c.description) {
+    const desc = el("p", c.description);
+    desc.className = "desc";
+    desc.title = "clique para expandir";
+    desc.addEventListener("click", () => desc.classList.toggle("open"));
+    node.append(desc);
   }
-  applyParamsToForm(new URLSearchParams(location.search));
+  return node;
+}
+
+function renderResearch(result) {
+  const container = document.getElementById("r-results");
+  const wrap = el("div");
+  wrap.style.display = "grid";
+  wrap.style.gap = "16px";
+
+  const summary = el("section");
+  summary.className = "panel";
+  const scope = result.term ? `para “${result.term}”` : "coletadas no recorte";
+  summary.append(el("h2", `${num(result.total)} reclamação(ões) ${scope}`));
+  const list = el("dl");
+  const rows = [
+    ["relevantes", num(result.counts.relevante)],
+    ["duvidosas", num(result.counts.duvidosa)],
+    ["provavelmente fora do assunto", num(result.counts.fora_do_assunto)],
+    ["com sinal de evento adverso", num(result.adverse)],
+  ];
+  if (result.date_from || result.date_to) {
+    rows.push(["sem data na fonte (fora do período)", num(result.undated_excluded)]);
+  }
+  for (const [label, value] of rows) {
+    list.append(el("dt", label));
+    list.append(el("dd", value));
+  }
+  summary.append(list);
+  let basis = "a área mais próxima de cada reclamação";
+  if (result.area) basis = areaLabel(result.area);
+  else if (result.category) basis = `a área mais próxima dentro de ${categoryLabel(result.category)}`;
+  summary.append(Object.assign(
+    el("div", `Etiqueta calculada contra: ${basis}. Regras ${result.rules_version}.`),
+    { className: "note" },
+  ));
+  if (result.truncated) {
+    summary.append(Object.assign(
+      el("div", `Mostrando as ${num(result.items.length)} primeiras, na ordem acima; `
+        + "as contagens valem para todas. Restrinja o período ou o termo para ver o restante."),
+      { className: "note" },
+    ));
+  }
+  wrap.append(summary);
+
+  if (!result.total) {
+    wrap.append(stateNode(result.term
+      ? "Nenhuma reclamação coletada com esse termo no período."
+      : "Nenhuma reclamação coletada no período."));
+  }
+  for (const [label, heading] of RELEVANCE_GROUPS) {
+    const items = result.items.filter((item) => item.relevance === label);
+    if (!items.length) continue;
+    const group = el(label === "fora_do_assunto" ? "details" : "section");
+    group.className = "panel";
+    group.append(el(label === "fora_do_assunto" ? "summary" : "h2", `${heading} (${num(items.length)})`));
+    for (const item of items) group.append(complaintNode(item));
+    wrap.append(group);
+  }
+  show(container, wrap);
+}
+
+async function runResearch() {
+  const params = new URLSearchParams();
+  const fields = [
+    ["term", "r-term"], ["category", "r-category"], ["area", "r-area"],
+    ["date_from", "r-from"], ["date_to", "r-to"],
+  ];
+  for (const [key, id] of fields) {
+    const value = document.getElementById(id).value.trim();
+    if (value) params.set(key, value);
+  }
+  const button = document.getElementById("r-submit");
+  const results = document.getElementById("r-results");
+  button.disabled = true;
+  show(results, stateNode("Carregando…"));
+  try {
+    renderResearch(await get("/research", params));
+  } catch (error) {
+    show(results, stateNode(error.message, true));
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function openResearch(term) {
+  document.getElementById("r-term").value = term;
+  showTab("reclamacoes");
+  runResearch();
+}
+
+document.getElementById("research-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  runResearch();
+});
+
+document.getElementById("r-reset").addEventListener("click", () => {
+  document.getElementById("research-form").reset();
+  refillSelect("r-area", areaOptions(""), "todas (a mais próxima)");
+  document.getElementById("r-results").replaceChildren();
+});
+
+document.getElementById("r-category").addEventListener("change", (event) => {
+  refillSelect("r-area", areaOptions(event.target.value), "todas (a mais próxima)");
+});
+
+// --------------------------------------------------------------------- referências
+
+// Taxonomia (de /research/areas) e produtos, compartilhados pelas abas.
+let AREAS = [];
+let PRODUCTS = [];
+
+function areaLabel(key) {
+  const area = AREAS.find((item) => item.key === key);
+  return area ? area.label : key;
+}
+
+function categoryLabel(key) {
+  const area = AREAS.find((item) => item.category === key);
+  return area ? area.category_label : key;
+}
+
+function productLabel(product) {
+  return product.brand ? `${product.name} — ${product.brand}` : product.name;
+}
+
+function categoryOptions() {
+  const seen = new Map();
+  for (const area of AREAS) seen.set(area.category, area.category_label);
+  return [...seen];
+}
+
+function areaOptions(category) {
+  return AREAS
+    .filter((area) => !category || area.category === category)
+    .map((area) => [area.key, area.label]);
+}
+
+// Refaz as opções mantendo a escolha atual quando ela continua válida.
+function refillSelect(id, options, placeholder) {
+  const select = document.getElementById(id);
+  const current = select.value;
+  select.replaceChildren();
+  if (placeholder !== undefined) {
+    const first = el("option", placeholder);
+    first.value = "";
+    select.append(first);
+  }
+  for (const [value, label] of options) {
+    const option = el("option", label);
+    option.value = value;
+    select.append(option);
+  }
+  if ([...select.options].some((option) => option.value === current)) select.value = current;
+}
+
+async function loadProducts() {
+  PRODUCTS = await get("/products", new URLSearchParams({ limit: "500" }));
+  const options = PRODUCTS.map((p) => [p.id, `${productLabel(p)}${p.active ? "" : " (inativo)"}`]);
+  refillSelect("c-product", options, "—");
+  refillSelect("a-product", options, "todos");
+  refillSelect("f-product", options, "todos");
+  renderProducts();
+}
+
+async function loadReference() {
+  AREAS = await get("/research/areas");
+  refillSelect("r-category", categoryOptions(), "todas");
+  refillSelect("r-area", areaOptions(""), "todas (a mais próxima)");
+  refillSelect("a-category", categoryOptions(), "todas");
+  refillSelect("p-category", categoryOptions());
+  refillSelect("p-subcategory", areaOptions(document.getElementById("p-category").value));
+  await loadProducts();
+}
+
+function sourceLink(url, text) {
+  // Só link de verdade vira <a>: nada de `javascript:` vindo do banco.
+  if (!/^https?:\/\//i.test(url)) return document.createTextNode(text);
+  const link = el("a", text);
+  link.href = url;
+  link.target = "_blank";
+  link.rel = "noopener noreferrer";
+  return link;
+}
+
+function smallButton(text, onClick, ghost) {
+  const button = el("button", text);
+  button.type = "button";
+  button.className = ghost ? "small ghost" : "small";
+  button.addEventListener("click", onClick);
+  return button;
+}
+
+// -------------------------------------------------------------------- busca & coleta
+
+const RUN_STATUS = { completed: "concluída", failed: "falhou", running: "em andamento" };
+
+function runNode(run, match) {
+  const failed = run.status === "failed";
+  const node = el("div");
+  node.className = failed ? "state error" : "state";
+  if (failed) {
+    node.append(el("div", `“${run.term}”: coleta falhou — ${run.notes[0] || "sem detalhe"}`));
+    return node;
+  }
+  let text = `“${run.term}”: ${num(run.found)} encontrada(s), ${num(run.inserted)} nova(s), `
+    + `${num(run.duplicates)} já conhecida(s)`;
+  if (run.failures) text += `, ${num(run.failures)} descartada(s)`;
+  node.append(el("div", `${text}.`));
+  if (match instanceof Error) {
+    node.append(el("div", `Identificação de produtos não executada: ${match.message}`));
+  } else if (match) {
+    node.append(el("div", `Produtos identificados: ${num(match.matched)} par(es) — `
+      + `${num(match.confirmed)} confirmado(s), ${num(match.possible)} possível(is).`));
+  }
+  const actions = el("div");
+  actions.className = "actions";
+  actions.append(smallButton("Ver reclamações", () => openResearch(run.term), true));
+  if (match && !(match instanceof Error) && match.possible) {
+    actions.append(smallButton("Revisar na Auditoria", () => showTab("auditoria"), true));
+  }
+  node.append(actions);
+  return node;
+}
+
+async function runCollect() {
+  const state = document.getElementById("c-state");
+  const term = document.getElementById("c-term").value.trim();
+  const productId = document.getElementById("c-product").value;
+  if (!term && !productId) {
+    show(state, stateNode("Informe um termo ou escolha um produto.", true));
+    return;
+  }
+  const body = { pages: Number(document.getElementById("c-pages").value) };
+  if (term) body.terms = [term];
+  if (productId) body.product_id = Number(productId);
+  const button = document.getElementById("c-submit");
+  button.disabled = true;
+  show(state, stateNode("Coletando no Reclame Aqui… pode levar alguns minutos."));
+  try {
+    const runs = await post("/searches", body);
+    const list = el("div");
+    list.className = "runs";
+    for (const run of runs) {
+      let match = null;
+      if (document.getElementById("c-match").checked && run.status === "completed") {
+        try {
+          match = await post("/matches/run", { search_run_id: run.id });
+        } catch (error) {
+          match = error;
+        }
+      }
+      list.append(runNode(run, match));
+    }
+    show(state, list);
+    auditReady = false;
+  } catch (error) {
+    show(state, stateNode(`Coleta não executada: ${error.message}`, true));
+  } finally {
+    button.disabled = false;
+    loadHistory();
+  }
+}
+
+async function loadHistory() {
+  const container = document.getElementById("c-history");
+  try {
+    const runs = await get("/searches", new URLSearchParams({ limit: "20" }));
+    if (!runs.length) {
+      show(container, stateNode("Nenhuma busca executada ainda."));
+      return;
+    }
+    const products = new Map(PRODUCTS.map((product) => [product.id, product]));
+    const table = el("table");
+    table.append(headRow([
+      ["quando", ""], ["termo", ""], ["produto", ""], ["situação", ""], ["encontradas", "num"],
+      ["novas", "num"], ["já conhecidas", "num"], ["falhas", "num"], ["", ""],
+    ]));
+    const body = el("tbody");
+    for (const run of runs) {
+      const tr = el("tr");
+      const product = products.get(run.product_id);
+      tr.append(el("td", isoMoment(run.started_at)));
+      tr.append(el("td", run.term));
+      tr.append(el("td", product ? productLabel(product) : "—"));
+      tr.append(el("td", RUN_STATUS[run.status] || run.status));
+      for (const value of [run.found, run.inserted, run.duplicates, run.failures]) {
+        tr.append(Object.assign(el("td", num(value)), { className: "num" }));
+      }
+      const cell = el("td");
+      cell.append(smallButton("ver", () => openResearch(run.term), true));
+      tr.append(cell);
+      body.append(tr);
+    }
+    table.append(body);
+    show(container, table);
+  } catch (error) {
+    show(container, stateNode(error.message, true));
+  }
+}
+
+function renderProducts() {
+  const container = document.getElementById("p-list");
+  if (!PRODUCTS.length) {
+    show(container, stateNode("Nenhum produto cadastrado."));
+    return;
+  }
+  const table = el("table");
+  table.append(headRow([
+    ["produto", ""], ["marca", ""], ["fabricante", ""], ["área", ""], ["termos de busca", ""],
+    ["situação", ""], ["", ""],
+  ]));
+  const body = el("tbody");
+  for (const product of PRODUCTS) {
+    const tr = el("tr");
+    tr.append(el("td", product.model ? `${product.name} · ${product.model}` : product.name));
+    tr.append(el("td", product.brand || "—"));
+    tr.append(el("td", product.manufacturer || "—"));
+    tr.append(el("td", product.subcategory ? areaLabel(product.subcategory) : categoryLabel(product.category)));
+    tr.append(el("td", product.search_terms.join(", ") || "(usa o nome)"));
+    tr.append(el("td", product.active ? "ativo" : "inativo"));
+    const cell = el("td");
+    const action = product.active ? "deactivate" : "activate";
+    cell.append(smallButton(product.active ? "desativar" : "ativar", async (event) => {
+      const state = document.getElementById("p-list-state");
+      event.target.disabled = true;
+      state.replaceChildren();
+      try {
+        await post(`/products/${product.id}/${action}`);
+        await loadProducts();
+      } catch (error) {
+        // O erro fica acima da tabela, que continua visível.
+        show(state, stateNode(error.message, true));
+        event.target.disabled = false;
+      }
+    }, true));
+    tr.append(cell);
+    body.append(tr);
+  }
+  table.append(body);
+  show(container, table);
+}
+
+function splitList(value) {
+  return (value || "").split(",").map((item) => item.trim()).filter(Boolean);
+}
+
+async function createProduct(form) {
+  const state = document.getElementById("p-state");
+  const data = new FormData(form);
+  const body = {
+    name: data.get("name").trim(),
+    category: data.get("category"),
+    subcategory: data.get("subcategory"),
+    aliases: splitList(data.get("aliases")),
+    search_terms: splitList(data.get("search_terms")),
+  };
+  for (const key of ["brand", "manufacturer", "model", "regulatory_id"]) {
+    const value = (data.get(key) || "").trim();
+    if (value) body[key] = value;
+  }
+  try {
+    const product = await post("/products", body);
+    form.reset();
+    refillSelect("p-subcategory", areaOptions(document.getElementById("p-category").value));
+    show(state, stateNode(`Produto “${product.name}” cadastrado.`));
+    await loadProducts();
+  } catch (error) {
+    show(state, stateNode(error.message, true));
+  }
+}
+
+document.getElementById("collect-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  runCollect();
+});
+
+document.getElementById("product-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  createProduct(event.target);
+});
+
+document.getElementById("p-category").addEventListener("change", (event) => {
+  refillSelect("p-subcategory", areaOptions(event.target.value));
+});
+
+// ------------------------------------------------------------------------- auditoria
+
+const DECISIONS = {
+  confirmed: ["confirmado", "ok"], possible: ["possível", "warn"], discarded: ["descartado", "bad"],
+};
+const AUDIT_PAGE = 50;
+const REVIEWER_KEY = "rapm.reviewer";
+let auditOffset = 0;
+let auditReady = false;
+
+function reviewerName() {
+  return document.getElementById("a-reviewer").value.trim();
+}
+
+function rememberReviewer() {
+  try {
+    localStorage.setItem(REVIEWER_KEY, reviewerName());
+  } catch (error) {
+    // Armazenamento indisponível: o nome só não fica lembrado.
+  }
+}
+
+function restoreReviewer() {
+  try {
+    document.getElementById("a-reviewer").value = localStorage.getItem(REVIEWER_KEY) || "";
+  } catch (error) {
+    // idem
+  }
+}
+
+function decisionTag(prefix, status) {
+  const [label, cls] = DECISIONS[status] || [status, ""];
+  return tagNode(`${prefix}: ${label}`, cls);
+}
+
+function revisionsNode(revisions) {
+  if (!revisions.length) {
+    return stateNode("Nenhuma decisão automática anterior: o par só foi avaliado pela versão atual do motor.");
+  }
+  const table = el("table");
+  table.append(headRow([
+    ["motor", ""], ["decisão", ""], ["método", ""], ["score", "num"], ["evidência", ""],
+    ["substituída em", ""],
+  ]));
+  const body = el("tbody");
+  for (const revision of revisions) {
+    const tr = el("tr");
+    tr.append(el("td", revision.matcher_version));
+    tr.append(el("td", (DECISIONS[revision.status] || [revision.status])[0]));
+    tr.append(el("td", revision.method));
+    tr.append(Object.assign(el("td", num(revision.score)), { className: "num" }));
+    tr.append(el("td", revision.evidence));
+    tr.append(el("td", isoMoment(revision.superseded_at)));
+    body.append(tr);
+  }
+  table.append(body);
+  return table;
+}
+
+function auditNode(entry) {
+  const { match, product, complaint } = entry;
+  const node = el("article");
+  node.className = "item";
+  node.append(el("h3", product.model ? `${productLabel(product)} · ${product.model}` : productLabel(product)));
+
+  const meta = el("div");
+  meta.className = "meta";
+  const area = product.subcategory ? areaLabel(product.subcategory) : categoryLabel(product.category);
+  meta.append(document.createTextNode(`${area} · reclamação: `), sourceLink(complaint.url, complaint.title));
+  node.append(meta);
+  const published = complaint.published_at ? isoDate(complaint.published_at) : "sem data";
+  node.append(Object.assign(
+    el("div", [complaint.company, published, complaint.location].filter(Boolean).join(" · ")),
+    { className: "meta" },
+  ));
+
+  const tags = el("div");
+  tags.className = "tags";
+  tags.append(decisionTag("automática", match.status));
+  if (match.reviewed_status) tags.append(decisionTag("humana", match.reviewed_status));
+  tags.append(tagNode(`método: ${match.method}`, ""));
+  tags.append(tagNode(`score: ${num(match.score)}`, ""));
+  tags.append(tagNode(`motor: ${match.matcher_version}`, ""));
+  if (match.stale_since) {
+    const reason = match.stale_reason ? ` — ${match.stale_reason}` : "";
+    tags.append(tagNode(`obsoleto desde ${isoDate(match.stale_since)}${reason}`, "warn"));
+  }
+  node.append(tags);
+
+  node.append(Object.assign(
+    el("div", `Evidência (${match.evidence_field}, termo “${match.matched_term}”): ${match.evidence}`),
+    { className: "evidence" },
+  ));
+  if (match.explanation) node.append(Object.assign(el("div", match.explanation), { className: "note" }));
+  if (match.reviewed_status) {
+    const note = match.review_note ? ` — “${match.review_note}”` : "";
+    node.append(Object.assign(
+      el("div", `Revisado por ${match.reviewed_by} em ${isoMoment(match.reviewed_at)}${note}`),
+      { className: "note" },
+    ));
+  }
+  if (complaint.description) {
+    const desc = el("p", complaint.description);
+    desc.className = "desc";
+    desc.title = "clique para expandir";
+    desc.addEventListener("click", () => desc.classList.toggle("open"));
+    node.append(desc);
+  }
+
+  const actions = el("div");
+  actions.className = "actions";
+  const noteInput = el("input");
+  noteInput.placeholder = "nota (opcional)";
+  noteInput.maxLength = 1000;
+  const feedback = el("div");
+  const history = el("div");
+  history.className = "history";
+
+  async function review(status) {
+    const reviewer = reviewerName();
+    if (reviewer.length < 2) {
+      show(feedback, stateNode("Informe o revisor no topo da aba antes de decidir.", true));
+      return;
+    }
+    for (const button of actions.querySelectorAll("button")) button.disabled = true;
+    try {
+      const updated = await post(`/matches/${match.id}/review`, {
+        status, reviewed_by: reviewer, note: noteInput.value.trim() || null,
+      });
+      rememberReviewer();
+      node.replaceWith(auditNode({ ...entry, match: updated }));
+    } catch (error) {
+      show(feedback, stateNode(error.message, true));
+      for (const button of actions.querySelectorAll("button")) button.disabled = false;
+    }
+  }
+
+  actions.append(
+    noteInput,
+    smallButton("Confirmar", () => review("confirmed")),
+    smallButton("Possível", () => review("possible"), true),
+    smallButton("Descartar", () => review("discarded"), true),
+    smallButton("Histórico do motor", async () => {
+      if (history.childElementCount) {
+        history.replaceChildren();
+        return;
+      }
+      show(history, stateNode("Carregando…"));
+      try {
+        show(history, revisionsNode(await get(`/matches/${match.id}/revisions`)));
+      } catch (error) {
+        show(history, stateNode(error.message, true));
+      }
+    }, true),
+  );
+  node.append(actions, feedback, history);
+  return node;
+}
+
+async function loadQueue(reset) {
+  const container = document.getElementById("a-results");
+  const scope = document.getElementById("a-scope").value;
+  if (reset) {
+    auditOffset = 0;
+    show(container, stateNode("Carregando…"));
+  }
+  const params = new URLSearchParams({ scope, limit: String(AUDIT_PAGE), offset: String(auditOffset) });
+  for (const [key, id] of [["product_id", "a-product"], ["category", "a-category"]]) {
+    const value = document.getElementById(id).value;
+    if (value) params.set(key, value);
+  }
+  try {
+    const entries = await get("/matches/queue", params);
+    if (reset && !entries.length) {
+      show(container, stateNode(scope === "pending"
+        ? "Nenhum candidato pendente de revisão no filtro."
+        : "Nenhum candidato no filtro."));
+      return;
+    }
+    let list = container.querySelector(".audit-list");
+    if (reset || !list) {
+      list = el("section");
+      list.className = "panel audit-list";
+      show(container, list);
+    }
+    const more = list.querySelector(".more");
+    if (more) more.remove();
+    for (const entry of entries) list.append(auditNode(entry));
+    auditOffset += entries.length;
+    if (entries.length === AUDIT_PAGE) {
+      const wrap = el("div");
+      wrap.className = "actions more";
+      wrap.append(smallButton("Carregar mais", () => loadQueue(false), true));
+      list.append(wrap);
+    }
+  } catch (error) {
+    show(container, stateNode(error.message, true));
+  }
+}
+
+document.getElementById("audit-form").addEventListener("submit", (event) => {
+  event.preventDefault();
+  rememberReviewer();
+  loadQueue(true);
+});
+
+// ---------------------------------------------------------------------------- abas
+
+const TABS = ["coleta", "reclamacoes", "dashboard", "auditoria"];
+let dashboardReady = false;
+
+async function openDashboard() {
+  if (!dashboardReady) {
+    dashboardReady = true;
+    try {
+      await loadOptions();
+    } catch (error) {
+      show(document.getElementById("cards"), stateNode(error.message, true));
+    }
+    applyParamsToForm(new URLSearchParams(location.search));
+  }
+  // Recarrega a cada abertura: uma pesquisa pode ter coletado reclamações novas.
   await loadAll();
+}
+
+function showTab(name) {
+  for (const button of document.querySelectorAll(".tab")) {
+    const active = button.dataset.tab === name;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-selected", String(active));
+  }
+  for (const panel of document.querySelectorAll("main")) {
+    panel.hidden = panel.id !== `tab-${name}`;
+  }
+  history.replaceState(null, "", `${location.pathname}${location.search}#${name}`);
+  if (name === "coleta") loadHistory();
+  if (name === "dashboard") openDashboard();
+  // A fila só recarrega sozinha na primeira abertura ou depois de uma coleta, para não
+  // perder o que o revisor está lendo.
+  if (name === "auditoria" && !auditReady) {
+    auditReady = true;
+    loadQueue(true);
+  }
+}
+
+for (const button of document.querySelectorAll(".tab")) {
+  button.addEventListener("click", () => showTab(button.dataset.tab));
+}
+
+(async function start() {
+  restoreReviewer();
+  try {
+    await loadReference();
+  } catch (error) {
+    show(document.getElementById("p-list"), stateNode(error.message, true));
+    show(document.getElementById("r-results"), stateNode(error.message, true));
+  }
+  const hash = location.hash.slice(1);
+  let initial = "coleta";
+  if (TABS.includes(hash)) initial = hash;
+  else if (hash === "pesquisa") initial = "reclamacoes";
+  // Link antigo do dashboard (com filtros na URL) continua abrindo o dashboard.
+  else if (location.search) initial = "dashboard";
+  showTab(initial);
 })();
 </script>
 </body>

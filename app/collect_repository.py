@@ -11,7 +11,7 @@ Regras que ficam aqui, e não na API:
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 
 from app.collector import dedupe_key
 from app.db import Database
@@ -28,6 +28,11 @@ _RUN_COLUMNS = (
     "found, collected, inserted, duplicates, failures, notes, started_at, finished_at"
 )
 _MAX_NOTES = 50
+# Título + descrição na forma de `normalize_text`, para busca textual determinística.
+_NORMALIZED_TEXT = (
+    "regexp_replace(strip_accents(lower(title || ' ' || coalesce(description, '')))"
+    ", '[^0-9a-z]+', ' ', 'g')"
+)
 
 
 class ComplaintNotFound(RecordNotFound):
@@ -88,9 +93,53 @@ class ComplaintRepository:
         search_run_id: int | None = None,
         product_id: int | None = None,
         query: str | None = None,
+        term: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> list[Complaint]:
+        """`term`: encontrada por busca com esse termo **ou** que o cita no texto.
+
+        `date_from`/`date_to` recortam pela publicação, inclusive nas duas pontas;
+        reclamação sem data fica de fora quando há recorte.
+        """
+        clause, params = self._where(
+            source=source,
+            search_run_id=search_run_id,
+            product_id=product_id,
+            query=query,
+            term=term,
+            date_from=date_from,
+            date_to=date_to,
+        )
+        with self._db.reading() as conn:
+            rows = conn.execute(
+                f"SELECT {_COMPLAINT_COLUMNS} FROM complaint{clause}"
+                " ORDER BY collected_at DESC, id DESC LIMIT ? OFFSET ?",
+                [*params, limit, offset],
+            ).fetchall()
+        return [self._to_complaint(row) for row in rows]
+
+    def count_undated(self, *, term: str | None = None) -> int:
+        """Reclamações sem data de publicação no escopo: ficam fora de qualquer recorte."""
+        clause, params = self._where(term=term)
+        undated = "published_at IS NULL"
+        clause = f"{clause} AND {undated}" if clause else f" WHERE {undated}"
+        with self._db.reading() as conn:
+            return conn.execute(f"SELECT count(*) FROM complaint{clause}", params).fetchone()[0]
+
+    @staticmethod
+    def _where(
+        *,
+        source: str | None = None,
+        search_run_id: int | None = None,
+        product_id: int | None = None,
+        query: str | None = None,
+        term: str | None = None,
+        date_from: date | None = None,
+        date_to: date | None = None,
+    ) -> tuple[str, list[object]]:
         where: list[str] = []
         params: list[object] = []
         if source is not None:
@@ -111,19 +160,24 @@ class ComplaintRepository:
         # Busca textual determinística sobre título e descrição, na forma normalizada.
         normalized_query = normalize_text(query)
         if normalized_query:
-            where.append(
-                "contains(regexp_replace(strip_accents(lower(title || ' ' ||"
-                " coalesce(description, ''))), '[^0-9a-z]+', ' ', 'g'), ?)"
-            )
+            where.append(f"contains({_NORMALIZED_TEXT}, ?)")
             params.append(normalized_query)
+        normalized_term = normalize_text(term)
+        if normalized_term:
+            where.append(
+                "(EXISTS (SELECT 1 FROM search_hit h JOIN search_run r ON r.id = h.search_run_id"
+                " WHERE h.complaint_id = complaint.id AND r.term_normalized = ?)"
+                f" OR contains({_NORMALIZED_TEXT}, ?))"
+            )
+            params.extend([normalized_term, normalized_term])
+        if date_from is not None:
+            where.append("published_at >= ?")
+            params.append(datetime.combine(date_from, time.min))
+        if date_to is not None:
+            where.append("published_at < ?")
+            params.append(datetime.combine(date_to + timedelta(days=1), time.min))
         clause = f" WHERE {' AND '.join(where)}" if where else ""
-        with self._db.reading() as conn:
-            rows = conn.execute(
-                f"SELECT {_COMPLAINT_COLUMNS} FROM complaint{clause}"
-                " ORDER BY collected_at DESC, id DESC LIMIT ? OFFSET ?",
-                [*params, limit, offset],
-            ).fetchall()
-        return [self._to_complaint(row) for row in rows]
+        return clause, params
 
     # ----------------------------------------------------------------- escrita
 
