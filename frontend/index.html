@@ -243,6 +243,18 @@
   .history { margin-top: 10px; }
   .history:empty { display: none; }
 
+  /* ------------------------------------------------------------------ tutorial */
+  .tutorial { font-size: 14px; }
+  .tutorial h3 { font-size: 14px; margin: 16px 0 6px; font-weight: 650; }
+  .tutorial ol { margin: 0; padding-left: 22px; display: grid; gap: 4px; }
+  .tutorial p { margin: 10px 0 0; max-width: 95ch; }
+  .tutorial .row h2 { margin: 0; }
+  .tutorial .row { margin-bottom: 10px; align-items: center; }
+  .tutorial p.goal {
+    margin: 0 0 12px; padding: 8px 12px; border-radius: 10px; background: var(--panel-2);
+    border: 1px solid var(--line);
+  }
+
   @media (max-width: 640px) {
     .topbar, main { padding-left: 16px; padding-right: 16px; }
     .panel { padding: 16px; }
@@ -270,6 +282,7 @@
       <button type="button" class="tab" role="tab" data-tab="reclamacoes">Reclamações</button>
       <button type="button" class="tab" role="tab" data-tab="dashboard">Dashboard</button>
       <button type="button" class="tab" role="tab" data-tab="auditoria">Auditoria</button>
+      <button type="button" class="tab" role="tab" data-tab="tutorial">Tutorial</button>
     </nav>
   </div>
 </header>
@@ -439,6 +452,125 @@
     <button type="submit">Aplicar</button>
   </form>
   <div id="a-results"></div>
+</main>
+
+<main id="tab-tutorial" hidden>
+  <p class="sub">
+    Guia rápido de uso. O caminho normal é: cadastrar o produto → coletar reclamações →
+    identificar produtos (matching) → revisar os candidatos na Auditoria → consultar as
+    reclamações e acompanhar os números no Dashboard.
+  </p>
+
+  <section class="panel tutorial">
+    <div class="row">
+      <h2>1. Busca &amp; coleta</h2>
+      <button type="button" class="small ghost" data-goto="coleta">Abrir aba</button>
+    </div>
+    <p class="goal"><b>Objetivo:</b> trazer para o banco as reclamações do Reclame Aqui sobre os produtos de interesse, guardando qual busca encontrou cada uma.</p>
+    <h3>Cadastrar um produto</h3>
+    <p class="goal"><b>Objetivo:</b> dizer ao sistema quais produtos monitorar e por quais nomes eles aparecem nas reclamações; é a base da coleta por produto e do matching.</p>
+    <ol>
+      <li>Abra <b>Cadastrar produto</b>, no fim da aba.</li>
+      <li>Preencha <b>Nome</b>, <b>Categoria</b> e <b>Subcategoria</b> (obrigatórios). Marca,
+        fabricante, modelo e registro Anvisa são opcionais, mas ajudam a identificar o produto.</li>
+      <li><b>Apelidos</b>: outras formas de escrever o nome, separadas por vírgula. O matching
+        também procura por eles no texto das reclamações.</li>
+      <li><b>Termos de busca</b>: o que será pesquisado no Reclame Aqui, separados por vírgula.
+        Em branco, a coleta usa o nome do produto.</li>
+      <li>Clique em <b>Cadastrar</b>. O produto aparece em <b>Produtos cadastrados</b>.</li>
+    </ol>
+    <p>Em <b>Produtos cadastrados</b>, para parar de monitorar um produto sem perder o histórico, use <b>desativar</b>: ele sai do matching sem apagar nada;
+      <b>ativar</b> o traz de volta.</p>
+    <h3>Coletar reclamações</h3>
+    <p class="goal"><b>Objetivo:</b> buscar reclamações novas no Reclame Aqui e, em seguida, apontar quais delas citam produtos cadastrados.</p>
+    <ol>
+      <li>Digite um <b>Termo livre</b> (ex.: “prótese mamária”) <i>ou</i> escolha um
+        <b>produto cadastrado</b> — neste caso, cada termo de busca dele vira uma busca.</li>
+      <li>Escolha quantas <b>Páginas</b> de resultados do Reclame Aqui percorrer. Mais páginas
+        trazem mais reclamações e demoram mais.</li>
+      <li>Deixe <b>identificar produtos cadastrados</b> marcado para rodar o matching logo após a
+        coleta.</li>
+      <li>Clique em <b>Coletar</b> e aguarde; pode levar alguns minutos.</li>
+    </ol>
+    <p>O resultado mostra, por termo, quantas reclamações foram encontradas, quantas são novas e
+      quantas já estavam no banco, além dos pares produto ↔ reclamação identificados. Use
+      <b>Ver reclamações</b> para abrir o que foi coletado e <b>Revisar na Auditoria</b> quando
+      houver candidatos “possíveis”.</p>
+    <p><b>Histórico de buscas</b> serve para saber o que já foi pesquisado e quando, evitando coletas repetidas. Lista as 20 buscas mais recentes; o botão <b>ver</b> reabre as
+      reclamações daquele termo.</p>
+  </section>
+
+  <section class="panel tutorial">
+    <div class="row">
+      <h2>2. Reclamações</h2>
+      <button type="button" class="small ghost" data-goto="reclamacoes">Abrir aba</button>
+    </div>
+    <p class="goal"><b>Objetivo:</b> ler e triar as reclamações já coletadas, separando o que é do assunto de interesse e destacando possíveis eventos adversos.</p>
+    <p>Consulta o que já foi coletado — não faz nova coleta.</p>
+    <ol>
+      <li><b>Termo</b> (opcional): sem ele, entram todas as reclamações do período.</li>
+      <li><b>Categoria</b> e <b>Área</b>: definem contra qual assunto a etiqueta de relevância é
+        calculada. Em branco, cada reclamação é comparada com a área mais próxima.</li>
+      <li><b>De</b> / <b>Até</b>: recorte pela data de publicação. Reclamações sem data na fonte
+        ficam fora quando há período e são contadas à parte.</li>
+      <li>Clique em <b>Consultar</b>; <b>Limpar</b> zera os filtros.</li>
+    </ol>
+    <p>As reclamações vêm agrupadas em <b>Relevantes</b>, <b>Duvidosas</b> e
+      <b>Provavelmente fora do assunto</b> (este grupo fica recolhido, mas nada é escondido).
+      Etiquetas em cada reclamação:</p>
+    <div class="tags">
+      <span class="tag bad">sinal: …</span>
+      <span class="tag ok">termo de contexto</span>
+      <span class="tag warn">outro assunto: …</span>
+    </div>
+    <p>Vermelho indica possível evento adverso; verde, palavras do assunto escolhido; amarelo,
+      palavras de outro assunto. A etiqueta é calculada na hora por listas de palavras e não é
+      gravada. Clique no título para abrir a reclamação original e no texto para expandi-lo.</p>
+  </section>
+
+  <section class="panel tutorial">
+    <div class="row">
+      <h2>3. Auditoria</h2>
+      <button type="button" class="small ghost" data-goto="auditoria">Abrir aba</button>
+    </div>
+    <p class="goal"><b>Objetivo:</b> validar por uma pessoa se cada reclamação realmente se refere ao produto apontado pelo sistema, deixando registrado quem decidiu e por quê.</p>
+    <p>Fila de pares produto ↔ reclamação encontrados pelo matching, do score mais alto para o
+      mais baixo.</p>
+    <ol>
+      <li>Informe seu nome em <b>Revisor</b> (obrigatório para decidir; fica lembrado neste
+        navegador).</li>
+      <li>Filtre por <b>Situação</b> (pendentes, já decididos ou todos), <b>Produto</b> e
+        <b>Categoria</b> e clique em <b>Aplicar</b>.</li>
+      <li>Leia a <b>evidência</b>: o trecho da reclamação e o termo que gerou o par.</li>
+      <li>Decida com <b>Confirmar</b>, <b>Possível</b> ou <b>Descartar</b>. A nota é opcional e
+        fica registrada junto com seu nome e o horário.</li>
+    </ol>
+    <p>Cada item mostra a decisão automática e, se houver, a humana, além do método, do score e
+      da versão do motor. A decisão humana prevalece e é mantida quando o matching é
+      reprocessado. <b>Histórico do motor</b> mostra o que versões anteriores decidiram sobre o
+      mesmo par. Um aviso “obsoleto” indica que o par perdeu a evidência num reprocessamento; ele
+      é datado, não apagado. Use <b>Carregar mais</b> no fim da lista para ver os próximos.</p>
+  </section>
+
+  <section class="panel tutorial">
+    <div class="row">
+      <h2>4. Dashboard</h2>
+      <button type="button" class="small ghost" data-goto="dashboard">Abrir aba</button>
+    </div>
+    <p class="goal"><b>Objetivo:</b> acompanhar em números o volume de reclamações por produto e área, sua evolução no tempo e o andamento da revisão.</p>
+    <ol>
+      <li>Filtre por <b>Produto</b>, <b>Categoria</b>, <b>Subcategoria</b> e período
+        (<b>De</b> / <b>Até</b>).</li>
+      <li><b>Passo</b> agrupa a evolução temporal por mês, semana ou dia.</li>
+      <li><b>Janela (dias)</b> define o período comparado em “Variação contra o período
+        anterior”.</li>
+      <li>Clique em <b>Aplicar</b>; <b>Limpar</b> volta ao padrão.</li>
+    </ol>
+    <p>Os cartões resumem produtos, reclamações, correspondências vigentes, pendências humanas e
+      buscas. Abaixo ficam a variação, a evolução temporal (todas × confirmadas), os produtos mais
+      citados e as reclamações por situação na fonte. Todos os números são contados pelo banco.
+      Os filtros ficam no endereço da página, então o link pode ser salvo ou compartilhado.</p>
+  </section>
 </main>
 
 <script>
@@ -1537,7 +1669,7 @@ document.getElementById("audit-form").addEventListener("submit", (event) => {
 
 // ---------------------------------------------------------------------------- abas
 
-const TABS = ["coleta", "reclamacoes", "dashboard", "auditoria"];
+const TABS = ["coleta", "reclamacoes", "dashboard", "auditoria", "tutorial"];
 let dashboardReady = false;
 
 async function openDashboard() {
@@ -1576,6 +1708,9 @@ function showTab(name) {
 
 for (const button of document.querySelectorAll(".tab")) {
   button.addEventListener("click", () => showTab(button.dataset.tab));
+}
+for (const button of document.querySelectorAll("[data-goto]")) {
+  button.addEventListener("click", () => showTab(button.dataset.goto));
 }
 
 (async function start() {
