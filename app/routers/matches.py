@@ -55,7 +55,8 @@ def list_matches(
         bool | None, Query(description="Perdeu a evidência em um reprocessamento")
     ] = None,
     pending: Annotated[
-        bool | None, Query(description="Aguarda decisão humana: vigente e ainda `possible`")
+        bool | None,
+        Query(description="Aguarda decisão humana: vigente, `possible` automático e sem revisão"),
     ] = None,
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -81,7 +82,8 @@ def review_queue(
     product_id: int | None = None,
     category: Category | None = None,
     scope: Annotated[
-        ReviewQueueScope, Query(description="Pendentes, já decididos ou ambos")
+        ReviewQueueScope,
+        Query(description="Pendentes, já decididos, validados por humano ou todos"),
     ] = ReviewQueueScope.PENDING,
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
@@ -95,6 +97,7 @@ def review_queue(
         product_id=product_id,
         category=category,
         pending=scope.pending,
+        reviewed=scope.reviewed,
         limit=limit,
         offset=offset,
     )

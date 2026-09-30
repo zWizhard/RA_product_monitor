@@ -88,6 +88,27 @@ No Windows, se o caminho do projeto for longo, a instalação pode falhar por li
 - Health check: <http://127.0.0.1:8000/health> — `200` quando o banco responde, `503`
   caso contrário.
 
+## Monitoramento semanal
+
+Coleta todos os produtos ativos, executa o matching e grava um relatório Markdown em
+`data/reports/relatorio-semanal-AAAA-MM-DD-exec-N.md`. Cada execução fica registrada na
+tabela `monitor_run` (status, produtos, contagens, erros). Feche o servidor antes: o
+DuckDB aceita um processo gravando por vez.
+
+```bash
+.venv/Scripts/python.exe -m app.monitor               # coleta + matching + relatório
+.venv/Scripts/python.exe -m app.monitor --sem-coleta  # só o relatório dos últimos 7 dias
+```
+
+Agendamento no Windows (toda segunda às 8h; log em `data/logs/monitor.log`):
+
+```bat
+schtasks /create /tn "RA Product Monitor semanal" /sc weekly /d MON /st 08:00 /tr "\"C:\caminho\RA_Product_Monitor\monitorar.bat\""
+```
+
+Em servidor/container, agende o mesmo comando (`python -m app.monitor`) por cron ou
+equivalente.
+
 ## Testes
 
 ```bash

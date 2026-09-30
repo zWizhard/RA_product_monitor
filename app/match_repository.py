@@ -20,6 +20,7 @@ from datetime import datetime
 from app.db import Database
 from app.matching import MatchCandidate, MatchStatus
 from app.models import (
+    IdentifiedProduct,
     MatchRevision,
     MatchReviewItem,
     ProductComplaintMatch,
@@ -111,8 +112,11 @@ def current_clause(prefix: str = "") -> str:
 
 
 def pending_clause(prefix: str = "") -> str:
-    """Par que espera decisão humana: vigente e com a decisão que vale ainda em `possible`."""
-    return f"{current_clause(prefix)} AND {decision_sql(prefix)} = 'possible'"
+    """Par que espera decisão humana: vigente, `possible` automático e ainda sem revisão."""
+    return (
+        f"{current_clause(prefix)} AND {prefix}reviewed_status IS NULL"
+        f" AND {prefix}status = 'possible'"
+    )
 
 
 # Comparação de score em ponto flutuante: diferença menor que isto é a mesma decisão.
@@ -191,6 +195,7 @@ class MatchRepository:
         product_id: int | None = None,
         category: str | None = None,
         pending: bool | None = True,
+        reviewed: bool = False,
         limit: int = 50,
         offset: int = 0,
     ) -> list[MatchReviewItem]:
@@ -198,6 +203,7 @@ class MatchRepository:
 
         Por padrão devolve só o que espera decisão humana, do score mais alto para o
         mais baixo. `pending=None` traz também o que já foi decidido, para reexame.
+        `reviewed=True` restringe ao que tem decisão humana, da mais recente à mais antiga.
         """
         where: list[str] = []
         params: list[object] = []
@@ -210,6 +216,10 @@ class MatchRepository:
         if pending is not None:
             pending_sql = pending_clause("m.")
             where.append(pending_sql if pending else f"NOT ({pending_sql})")
+        order = "m.score DESC, m.id"
+        if reviewed:
+            where.append("m.reviewed_status IS NOT NULL")
+            order = "m.reviewed_at DESC, m.id DESC"
         filters = f" WHERE {' AND '.join(where)}" if where else ""
         with self._db.reading() as conn:
             rows = conn.execute(
@@ -218,7 +228,7 @@ class MatchRepository:
                 " FROM product_complaint_match m"
                 " JOIN product p ON p.id = m.product_id"
                 " JOIN complaint c ON c.id = m.complaint_id"
-                f"{filters} ORDER BY m.score DESC, m.id LIMIT ? OFFSET ?",
+                f"{filters} ORDER BY {order} LIMIT ? OFFSET ?",
                 [*params, limit, offset],
             ).fetchall()
         cut = len(_MATCH_FIELDS)
@@ -326,6 +336,30 @@ class MatchRepository:
                 [match_id],
             ).fetchall()
         return [MatchRevision(**dict(zip(_REVISION_FIELDS, row, strict=True))) for row in rows]
+
+    def identified_products(self) -> dict[int, list[IdentifiedProduct]]:
+        """Por reclamação, os produtos de pares vigentes cuja decisão não é `discarded`."""
+        with self._db.reading() as conn:
+            rows = conn.execute(
+                f"SELECT m.complaint_id, m.id, m.product_id, p.name, {decision_sql('m.')},"
+                " m.score, m.reviewed_status IS NOT NULL"
+                " FROM product_complaint_match m JOIN product p ON p.id = m.product_id"
+                f" WHERE {current_clause('m.')} AND {decision_sql('m.')} <> 'discarded'"
+                " ORDER BY m.complaint_id, m.score DESC, m.id"
+            ).fetchall()
+        found: dict[int, list[IdentifiedProduct]] = {}
+        for complaint_id, match_id, product_id, name, decision, score, human in rows:
+            found.setdefault(complaint_id, []).append(
+                IdentifiedProduct(
+                    match_id=match_id,
+                    product_id=product_id,
+                    name=name,
+                    decision=MatchStatus(decision),
+                    score=score,
+                    human=human,
+                )
+            )
+        return found
 
     def pairs_for_products(self, product_ids: list[int]) -> set[tuple[int, int]]:
         """Pares já gravados para estes produtos, para detectar os que perderam evidência."""

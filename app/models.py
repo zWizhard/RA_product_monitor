@@ -276,12 +276,17 @@ class ProductComplaintMatch(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def pending(self) -> bool:
-        """Espera decisão humana: vigente e ainda em `possible`.
+        """Espera decisão humana: vigente, em `possible` e ainda sem revisão.
 
-        Vale tanto para o que o motor deixou em dúvida quanto para o que um analista
-        revisou e manteve em dúvida. Par obsoleto não entra na fila.
+        Só o que o motor deixou em dúvida. O `possible` humano é decisão final: o
+        analista viu e registrou que o texto não permite saber qual produto é (ex.: a
+        fabricante tem várias versões do mesmo produto base). Par obsoleto não entra na fila.
         """
-        return self.stale_since is None and self.decision is MatchStatus.POSSIBLE
+        return (
+            self.stale_since is None
+            and self.reviewed_status is None
+            and self.status is MatchStatus.POSSIBLE
+        )
 
 
 class MatchRevision(BaseModel):
@@ -349,12 +354,19 @@ class ReviewQueueScope(StrEnum):
 
     PENDING = "pending"  # aguarda decisão humana
     DECIDED = "decided"  # já decidido, para reexame
+    REVIEWED = "reviewed"  # validado por humano, da validação mais recente para a mais antiga
     ALL = "all"
 
     @property
     def pending(self) -> bool | None:
         """Filtro correspondente em `MatchRepository.queue`; `None` não filtra."""
-        return None if self is ReviewQueueScope.ALL else self is ReviewQueueScope.PENDING
+        if self in (ReviewQueueScope.ALL, ReviewQueueScope.REVIEWED):
+            return None
+        return self is ReviewQueueScope.PENDING
+
+    @property
+    def reviewed(self) -> bool:
+        return self is ReviewQueueScope.REVIEWED
 
 
 class MatchReviewItem(BaseModel):
@@ -438,8 +450,27 @@ class ResearchArea(BaseModel):
     category_label: str
 
 
+class IdentifiedProduct(BaseModel):
+    """Produto cadastrado ligado à reclamação por um par vigente e não descartado.
+
+    Vem do matching; a pesquisa não identifica produto por conta própria.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    match_id: int
+    product_id: int
+    name: str
+    decision: MatchStatus
+    score: float
+    human: bool
+
+
 class ResearchItem(BaseModel):
-    """Reclamação como coletada, com a etiqueta de relevância e as palavras que a decidiram."""
+    """Reclamação como coletada, com a etiqueta de relevância e as palavras que a decidiram.
+
+    `nature` é a triagem por sinais; `products` vazio = produto não identificado.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -449,6 +480,10 @@ class ResearchItem(BaseModel):
     context_terms: list[str]
     off_topic_terms: list[str]
     adverse_signals: list[str]
+    nature: str
+    technical_signals: list[str]
+    commercial_signals: list[str]
+    products: list[IdentifiedProduct]
 
 
 class ResearchResult(BaseModel):
@@ -462,11 +497,15 @@ class ResearchResult(BaseModel):
     date_from: date | None
     date_to: date | None
     rules_version: str
-    # `total`, `counts` e `adverse` contam tudo o que foi etiquetado; `items` traz até
-    # `limit`, já ordenados, e `truncated` avisa quando ficou algo de fora.
+    # `total`, `counts`, `adverse`, `natures` e `unidentified` contam tudo o que passou
+    # pelos filtros, inclusive `nature` e `identified` — com `nature` escolhida, as
+    # outras triagens aparecem zeradas. `items` traz até `limit`, já ordenados, e
+    # `truncated` avisa quando ficou algo de fora.
     total: int
     counts: dict[str, int]
     adverse: int
+    natures: dict[str, int]
+    unidentified: int
     undated_excluded: int
     truncated: bool
     items: list[ResearchItem]
@@ -537,11 +576,28 @@ class ComplaintMetrics(BaseModel):
     by_status: list[StatusCount]
 
 
+class ReviewCount(BaseModel):
+    """Pares vigentes revisados, pela decisão automática e pela humana."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    automatic: MatchStatus
+    human: MatchStatus
+    pairs: int
+
+
 class MatchMetrics(BaseModel):
     """Correspondências no escopo, pela decisão que vale.
 
     `confirmed`, `possible` e `discarded` contam apenas pares vigentes e somam
     `current`. `pending` é o subconjunto de `possible` que espera decisão humana.
+
+    `review` cruza, nos pares vigentes revisados, a decisão automática com a humana.
+    `precision` é a da confirmação automática contra a revisão — confirmados pelo
+    revisor sobre confirmados mais descartados, sem a dúvida humana — e só vem quando
+    **todo** confirmado automático vigente do escopo foi revisado: amostra parcial é
+    escolha do revisor, não amostra do motor. Recall não é calculável aqui: par que o
+    motor não propôs nunca é gravado, então o falso negativo não aparece no banco.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -554,6 +610,8 @@ class MatchMetrics(BaseModel):
     discarded: int
     reviewed: int
     pending: int
+    review: list[ReviewCount]
+    precision: float | None
 
 
 class SearchMetrics(BaseModel):
@@ -622,6 +680,21 @@ class TimelineBucket(BaseModel):
     period_start: date
     complaints: int
     confirmed: int
+
+
+class NatureDistribution(BaseModel):
+    """Reclamações do escopo pela triagem de `app.relevance`, calculada na hora.
+
+    É indício por vocabulário, não classificação validada: `rules_version` diz qual
+    regra contou. `counts` soma `total`.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    filters: DashboardFiltersEcho
+    rules_version: str
+    total: int
+    counts: dict[str, int]
 
 
 class Timeline(BaseModel):

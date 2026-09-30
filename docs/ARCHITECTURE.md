@@ -18,6 +18,14 @@ Monitorar reclamações do Reclame Aqui e identificar correspondências com prod
 8. Correspondências podem passar por validação humana.
 9. Dashboard usa dados estruturados; LLM não calcula métricas.
 
+Duas modalidades de busca usam a mesma coleta e o mesmo banco. A **direcionada** parte do
+produto (termos do cadastro) e segue o fluxo acima. A **ativa** coleta por termo geral, sem
+produto, e é lida em `/research` pela triagem de `app/relevance.py` — escopo, natureza da
+ocorrência e produto. O produto só vem de par que o matching já gravou; sem par, a
+reclamação fica "produto não identificado" e continua listada. Não há etapa nova de
+identificação: se a leitura humana revelar o produto, ele é cadastrado e o matching gera o
+par, que segue para a revisão existente.
+
 ## Camadas alvo
 
 - `api`: contratos HTTP e validação.
@@ -51,7 +59,11 @@ cada fase precisar deles, não antecipadamente.
 - `app/golden.py`: formato do Golden Dataset — leitura, escrita e validação do gabarito.
 - `app/golden_export.py`: congela as validações humanas do banco em um Golden Dataset.
 - `app/evaluation.py`: mede uma versão do motor contra um Golden Dataset (CLI e relatório).
+- `app/relevance.py`: triagem por vocabulário (escopo e natureza da ocorrência), calculada
+  na hora e nunca gravada; usada por `/research`, `/dashboard/natures` e pelo relatório.
 - `app/analytics.py`: métricas do dashboard — agregações SQL, escopo comum e teste de variação.
+- `app/monitor.py`: rotina periódica (CLI) — coleta dos produtos ativos, matching e
+  relatório semanal em Markdown; registro em `monitor_run` (D-020).
 - `frontend/index.html`: dashboard, página única sem framework, servida em `/` pela própria API.
 - `golden/`: os conjuntos de referência, versionados. `glicosimetro-2026-09-25.json` é o
   conjunto permanente de regressão — 145 pares julgados por um revisor — contra o qual
@@ -140,6 +152,13 @@ Tendência tem duas condições, verificadas separadamente e devolvidas na respo
 de coleta nas duas janelas e significância estatística (D-017). Sem as duas, a API devolve os
 números e nenhuma direção. Nenhuma métrica é descrita, estimada ou interpretada por LLM.
 
+Duas leituras fogem da agregação SQL pura e dizem o porquê na resposta. A triagem da
+ocorrência (`/dashboard/natures`) conta a regra de vocabulário de `app/relevance.py` sobre as
+reclamações do escopo, com a versão da regra. A qualidade do matching cruza decisão
+automática × humana nos pares vigentes; a precisão da confirmação automática só é devolvida
+quando todo confirmado automático do escopo foi revisado, e recall/F1 não são calculados,
+porque par que o motor não propôs não é gravado.
+
 ### Search
 Execução/termo que levou à descoberta de uma reclamação. Persistida em `search_run`: um
 registro por termo consultado, aberto antes da coleta, de modo que uma busca que falha
@@ -152,6 +171,10 @@ significado fixo: `found` (itens detectados), `collected` (itens com URL real), 
 `collected = inserted + duplicates`. `notes` é canal separado de `failures`: além das
 falhas, registra o que foi gravado com perda de fidelidade (texto só disponível em prévia,
 texto acima do limite) e o bloqueio que interrompeu a paginação.
+
+A rotina periódica agrupa as buscas de uma execução em `monitor_run`: status
+(`completed`, `partial`, `failed`), período do relatório, contagens, erros e resultado por
+produto (JSON). Busca bloqueada sem nada coletado conta como falha da rotina.
 
 ## Modo de implantação
 

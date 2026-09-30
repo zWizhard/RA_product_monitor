@@ -166,6 +166,8 @@ schema e sem risco de ficar dessincronizada. Em troca, só a última revisão de
 conhecida: se rastrear quem mudou de opinião virar requisito, será preciso uma tabela de
 histórico e uma migração.
 
+A regra de pendência foi revista em D-019: dúvida humana não é mais pendente.
+
 ---
 
 ## D-011 — Extração pela resposta JSON da busca, capturada na própria sessão
@@ -361,9 +363,8 @@ rotulada antes de entrar.
 Consequência não prevista, encontrada em revisão: como o par suprimido é datado como
 obsoleto, ele sai da fila **mesmo quando o revisor o marcou `possible`** — a arbitragem
 passa por cima da dúvida humana, contra o que D-010 e `docs/DOMAIN.md` afirmam. Três pares
-ficaram nessa situação no primeiro reprocessamento. Está em aberto, registrado em
-`docs/STATE.md`: reabrir os pares, mudar a regra de pendência ou assumir a precedência da
-arbitragem e corrigir o domínio.
+ficaram nessa situação no primeiro reprocessamento. Resolvido por D-019: dúvida humana
+deixou de ser pendência.
 
 **Limites conhecidos, deliberadamente não tratados:**
 - cinco falsos positivos restantes: quatro são reclamação de compra, entrega ou troca, não
@@ -488,3 +489,46 @@ navegador e não de outro usuário.
 `RAPM_ALLOWED_HOSTS` ou mudar `--host` sem ela desfaz a proteção. `RAPM_ALLOWED_HOSTS` é uma
 lista e, por variável de ambiente, precisa ser escrita em JSON.
 
+---
+
+## D-019 — Dúvida humana é decisão final
+
+**Decisão:** um par só está pendente quando é `possible` automático, vigente e ainda sem
+revisão humana. Qualquer revisão tira o par da fila, inclusive `possible`, que passa a
+significar ambiguidade registrada: a reclamação cita o produto, mas não permite saber qual
+versão, porque a fabricante tem mais de um tipo do mesmo produto base. Revê a regra de
+pendência de D-010; o restante de D-010 continua valendo.
+
+**Motivo:** no uso real, a dúvida humana nesses casos não se resolve com nova leitura, e
+mantê-la na fila fazia o item voltar a cada recarga, atrapalhando a revisão dos demais.
+Também encerra a contradição aberta em D-014: par suprimido com dúvida humana já não perde
+pendência, porque dúvida humana não é pendência.
+
+**Alternativa rejeitada:** um quarto status humano (`ambiguous`), que exigiria migração e
+mudaria o vocabulário do gabarito e das métricas sem ganho prático.
+
+**Consequência:** a contagem de pendentes do dashboard deixou de incluir a dúvida humana.
+Os pares revisados ficam consultáveis na fila com `scope=reviewed` (seção "Avaliações já
+validadas" da Auditoria). Reexaminar um par em dúvida é feito pelo filtro "já decididos".
+
+## D-020 — Monitoramento periódico como comando único, fora da API
+
+**Decisão:** a rotina semanal é um comando (`python -m app.monitor`) que reutiliza coleta,
+deduplicação, matching e métricas existentes e grava um relatório Markdown em
+`data/reports/`. O agendamento fica fora do código: Agendador de Tarefas (`monitorar.bat`),
+cron ou container chamam o mesmo comando. Cada execução é registrada em `monitor_run`;
+falha de um produto ou bloqueio da fonte deixa a execução `partial`, sem cancelar as demais.
+No relatório, "sinal" só existe por dois critérios escritos nele: alta pelo teste de D-017
+por produto, ou 2+ reclamações novas do mesmo produto com indício de evento adverso — este
+é aviso para leitura humana, não reincidência medida.
+
+**Motivo:** o sistema é local e não fica ligado; um comando é executável à mão e por
+qualquer agendador sem amarrar a lógica a uma plataforma, e a coleta regular é o que falta
+para `/dashboard/trend` ter janelas comparáveis.
+
+**Alternativa rejeitada:** agendador dentro da API (APScheduler/tarefa no `lifespan`), que
+só roda com o servidor aberto e duplicaria o ciclo de vida do processo.
+
+**Consequência:** o DuckDB aceita um processo gravando por vez, então a rotina não roda com
+o servidor aberto — sai com código 2 e mensagem, registrada só no log. Execução que morre
+no meio é marcada `failed` pela seguinte.

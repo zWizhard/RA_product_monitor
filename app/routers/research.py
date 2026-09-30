@@ -2,6 +2,10 @@
 
 A coleta continua em `POST /searches`; esta rota só lê o banco. A etiqueta vem de
 `app.relevance`, calculada na hora e nunca gravada.
+
+Busca ativa: coletar com termos gerais (sem produto) e ler aqui pela triagem. O produto
+só aparece quando o matching já o associou; sem isso a reclamação fica como "produto não
+identificado" e continua listada para leitura humana.
 """
 
 from __future__ import annotations
@@ -13,12 +17,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from app.collect_repository import ComplaintRepository
 from app.db import Database
+from app.match_repository import MatchRepository
 from app.models import ResearchArea, ResearchItem, ResearchResult
 from app.relevance import (
     AREAS,
     AREAS_BY_KEY,
     CATEGORY_LABELS,
     LABEL_ORDER,
+    NATURE_ORDER,
     RULES_VERSION,
     classify,
 )
@@ -65,6 +71,12 @@ def research(
     ] = None,
     date_from: Annotated[date | None, Query(description="Publicação a partir de")] = None,
     date_to: Annotated[date | None, Query(description="Publicação até, inclusive")] = None,
+    nature: Annotated[
+        str | None, Query(description=f"Triagem: {', '.join(NATURE_ORDER)}")
+    ] = None,
+    identified: Annotated[
+        bool | None, Query(description="Com produto associado pelo matching (ou sem)")
+    ] = None,
     limit: Annotated[int, Query(ge=1, le=2000)] = 500,
 ) -> ResearchResult:
     """Reclamações encontradas por busca com o termo ou que o citam, no período.
@@ -78,6 +90,9 @@ def research(
         raise HTTPException(422, f"área '{area}' desconhecida; aceitas: {', '.join(AREAS_BY_KEY)}")
     if area is not None and category is not None and AREAS_BY_KEY[area].category != category:
         raise HTTPException(422, f"área '{area}' não pertence à categoria '{category}'")
+    nature = nature or None
+    if nature is not None and nature not in NATURE_ORDER:
+        raise HTTPException(422, f"triagem '{nature}' desconhecida; aceitas: {', '.join(NATURE_ORDER)}")
     if date_from and date_to and date_from > date_to:
         raise HTTPException(422, f"date_from ({date_from}) é posterior a date_to ({date_to})")
 
@@ -88,9 +103,15 @@ def research(
         term=term, date_from=date_from, date_to=date_to, limit=_MAX_SCAN + 1
     )
     scan_truncated = len(complaints) > _MAX_SCAN
+    products = MatchRepository(db).identified_products()
     items = []
     for complaint in complaints[:_MAX_SCAN]:
         result = classify(complaint.title, complaint.description, area, category)
+        found = products.get(complaint.id, [])
+        if nature is not None and result.nature != nature:
+            continue
+        if identified is not None and bool(found) != identified:
+            continue
         items.append(
             ResearchItem(
                 complaint=complaint,
@@ -99,6 +120,10 @@ def research(
                 context_terms=list(result.context_terms),
                 off_topic_terms=list(result.off_topic_terms),
                 adverse_signals=list(result.adverse_signals),
+                nature=result.nature,
+                technical_signals=list(result.technical_signals),
+                commercial_signals=list(result.commercial_signals),
+                products=found,
             )
         )
     # Duas ordenações estáveis: a data desempata dentro do grupo; sem data vai ao fim.
@@ -115,6 +140,8 @@ def research(
         total=len(items),
         counts={label: sum(item.relevance == label for item in items) for label in LABEL_ORDER},
         adverse=sum(bool(item.adverse_signals) for item in items),
+        natures={key: sum(item.nature == key for item in items) for key in NATURE_ORDER},
+        unidentified=sum(not item.products for item in items),
         undated_excluded=repo.count_undated(term=term) if dated_scope else 0,
         truncated=scan_truncated or len(items) > limit,
         items=items[:limit],

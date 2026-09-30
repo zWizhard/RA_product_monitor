@@ -100,13 +100,28 @@ Só identidade forte confirma automaticamente: nome do produto ou alias encontra
 texto. Marca com contexto, termo de busca e variação aproximada geram candidato para
 revisão — nunca confirmação. `discarded` automático não existe: descartar é ato humano.
 
-Pendente não é um quarto estado: é `possible` vigente. Um par está pendente quando a
-decisão que vale — a humana, quando existe — ainda é `possible` e a evidência não está
-obsoleta. É isso que forma a fila de revisão: o analista que mantém a dúvida registra
-`possible` e o par continua na fila; confirmar ou descartar o tira dela.
+Pendente não é um quarto estado: é `possible` automático vigente ainda sem revisão
+humana. É isso que forma a fila de revisão. Qualquer decisão humana tira o par da fila,
+inclusive `possible`: nesse caso é decisão final de ambiguidade — a reclamação cita o
+produto, mas não permite saber qual versão (a fabricante tem mais de um tipo do mesmo
+produto base).
 
 Match que perde evidência em um reprocessamento é datado como obsoleto, não apagado, e
 sai da fila: sem evidência vigente não há o que revisar.
+
+## Triagem da ocorrência
+
+Indício para leitura, nunca classificação final: por vocabulário (`app/relevance.py`), cada
+reclamação recebe uma natureza — possível evento adverso, possível queixa técnica, problema
+comercial ou sem sinal. Dano à pessoa prevalece sobre defeito, e defeito sobre queixa de
+venda. Palavra genérica demais para apontar defeito ("falha" sozinha) só conta junto do
+objeto ("falha no sensor"). A triagem é calculada na hora, não é gravada, não associa
+produto e não altera match nem decisão humana. Mudou vocabulário ou regra, muda a versão
+(`rel-N`), que acompanha toda resposta.
+
+Produto identificado é par vigente e não descartado, com a decisão e quem a tomou. Sem
+esse par, a reclamação é "produto não identificado": nunca é descartada nem escondida, e
+nenhuma regra de triagem atribui produto a ela.
 
 ## Regra de ouro
 

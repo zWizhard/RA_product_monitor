@@ -196,6 +196,14 @@
   .chart .axis { fill: var(--muted); }
   .chart .all { fill: var(--chart-1); }
   .chart .confirmed { fill: var(--chart-2); }
+  .chart .cumulative { fill: none; stroke: var(--warn); stroke-width: 2; }
+  .chart .cumulative-dot { fill: var(--warn); }
+  .chart .reference { stroke: var(--warn); stroke-dasharray: 4 4; opacity: 0.6; }
+  .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .kpi { padding: 12px 14px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); }
+  .kpi b { display: block; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+  .kpi span { color: var(--muted); font-size: 12px; }
+  .scroll { overflow-x: auto; margin-top: 16px; }
   .row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
   .note { color: var(--muted); font-size: 12px; margin-top: 10px; }
   [hidden] { display: none !important; }
@@ -294,6 +302,11 @@
     "identificar produtos" marcado, o matching roda sobre o que a coleta trouxe e os
     candidatos vão para a Auditoria.
   </p>
+  <p class="sub">
+    Hoje o Reclame Aqui só libera a 1ª página de resultados (10 reclamações) por termo: a partir
+    da 2ª, a proteção do site bloqueia e a coleta para, com nota no histórico. Para ampliar a
+    cobertura, use mais termos, não mais páginas.
+  </p>
   <form class="filters" id="collect-form">
     <label class="grow">Termo livre
       <input id="c-term" maxlength="200" placeholder="ex.: prótese mamária">
@@ -303,7 +316,7 @@
     </label>
     <label>Páginas
       <select id="c-pages">
-        <option>1</option><option>2</option><option selected>3</option><option>5</option>
+        <option selected>1</option><option>2</option><option>3</option><option>5</option>
         <option>10</option>
       </select>
     </label>
@@ -357,6 +370,22 @@
     </label>
     <label>Área
       <select id="r-area"><option value="">todas (a mais próxima)</option></select>
+    </label>
+    <label>Triagem
+      <select id="r-nature">
+        <option value="">todas</option>
+        <option value="possivel_evento_adverso">possível evento adverso</option>
+        <option value="possivel_queixa_tecnica">possível queixa técnica</option>
+        <option value="problema_comercial">problema comercial</option>
+        <option value="sem_sinal">sem sinal</option>
+      </select>
+    </label>
+    <label>Produto
+      <select id="r-identified">
+        <option value="">todos</option>
+        <option value="true">identificado</option>
+        <option value="false">não identificado</option>
+      </select>
     </label>
     <label>De <input type="date" id="r-from"></label>
     <label>Até <input type="date" id="r-to"></label>
@@ -421,13 +450,23 @@
   </section>
 
   <section class="panel">
-    <h2>Produtos mais citados</h2>
+    <h2>Concentração por produto (Pareto)</h2>
     <div id="top"><div class="state">Carregando…</div></div>
   </section>
 
   <section class="panel">
     <h2>Reclamações por situação na fonte</h2>
     <div id="status"><div class="state">Carregando…</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Triagem da ocorrência (indício por palavras)</h2>
+    <div id="natures"><div class="state">Carregando…</div></div>
+  </section>
+
+  <section class="panel">
+    <h2>Qualidade do matching</h2>
+    <div id="quality"><div class="state">Carregando…</div></div>
   </section>
 </main>
 
@@ -452,6 +491,45 @@
     <button type="submit">Aplicar</button>
   </form>
   <div id="a-results"></div>
+  <details class="panel" id="a-validated">
+    <summary>Avaliações já validadas</summary>
+    <div id="a-validated-results"></div>
+  </details>
+</main>
+
+<main id="tab-produto" hidden>
+  <div class="actions">
+    <button type="button" class="small ghost" id="m-back">← Voltar aos produtos cadastrados</button>
+  </div>
+  <p class="sub">
+    Monitoramento de um produto cadastrado. Todos os números são contados pelo banco e seguem
+    a decisão que vale: a humana quando existe, a automática caso contrário. Pares obsoletos
+    (que perderam a evidência) não contam como vigentes.
+  </p>
+  <section class="panel">
+    <h2 id="m-title">Produto</h2>
+    <div id="m-ident"><div class="state">Carregando…</div></div>
+  </section>
+  <section class="cards" id="m-cards"><div class="state">Carregando…</div></section>
+  <section class="panel">
+    <h2>Evolução temporal</h2>
+    <div id="m-timeline"><div class="state">Carregando…</div></div>
+  </section>
+  <section class="panel">
+    <h2>Reclamações por situação na fonte</h2>
+    <div id="m-status"><div class="state">Carregando…</div></div>
+  </section>
+  <section class="panel">
+    <h2>Tipos de problema e reincidência</h2>
+    <div class="state">
+      Não disponível: as reclamações não são classificadas por tipo de problema no banco,
+      por isso não há como contar problemas frequentes nem reincidentes sem inventar categorias.
+    </div>
+  </section>
+  <section class="panel">
+    <h2>Reclamações associadas</h2>
+    <div id="m-complaints"><div class="state">Carregando…</div></div>
+  </section>
 </main>
 
 <main id="tab-tutorial" hidden>
@@ -481,13 +559,17 @@
     </ol>
     <p>Em <b>Produtos cadastrados</b>, para parar de monitorar um produto sem perder o histórico, use <b>desativar</b>: ele sai do matching sem apagar nada;
       <b>ativar</b> o traz de volta.</p>
+    <p><b>Ver monitoramento</b> abre a página do produto: cadastro, totais de reclamações e de
+      validação, evolução temporal, qualidade do matching e a lista das reclamações associadas,
+      com link para a original.</p>
     <h3>Coletar reclamações</h3>
     <p class="goal"><b>Objetivo:</b> buscar reclamações novas no Reclame Aqui e, em seguida, apontar quais delas citam produtos cadastrados.</p>
     <ol>
       <li>Digite um <b>Termo livre</b> (ex.: “prótese mamária”) <i>ou</i> escolha um
         <b>produto cadastrado</b> — neste caso, cada termo de busca dele vira uma busca.</li>
-      <li>Escolha quantas <b>Páginas</b> de resultados do Reclame Aqui percorrer. Mais páginas
-        trazem mais reclamações e demoram mais.</li>
+      <li>Escolha quantas <b>Páginas</b> de resultados do Reclame Aqui percorrer. Hoje o site só
+        libera a 1ª página (10 reclamações) por termo; a partir da 2ª a proteção do site bloqueia e
+        a coleta para. Para ampliar a cobertura, cadastre mais termos.</li>
       <li>Deixe <b>identificar produtos cadastrados</b> marcado para rodar o matching logo após a
         coleta.</li>
       <li>Clique em <b>Coletar</b> e aguarde; pode levar alguns minutos.</li>
@@ -498,6 +580,12 @@
       houver candidatos “possíveis”.</p>
     <p><b>Histórico de buscas</b> serve para saber o que já foi pesquisado e quando, evitando coletas repetidas. Lista as 20 buscas mais recentes; o botão <b>ver</b> reabre as
       reclamações daquele termo.</p>
+    <h3>Monitoramento periódico</h3>
+    <p class="goal"><b>Objetivo:</b> repetir a coleta de todos os produtos ativos sem precisar abrir a página.</p>
+    <p>Fora da interface, <b>monitorar.bat</b> coleta os termos de todos os produtos ativos,
+      roda o matching e grava um relatório em <code>data/reports</code>. Pode ser agendado no
+      Agendador de Tarefas (veja o README). Feche o servidor antes: o banco aceita um processo
+      por vez.</p>
   </section>
 
   <section class="panel tutorial">
@@ -526,6 +614,13 @@
     <p>Vermelho indica possível evento adverso; verde, palavras do assunto escolhido; amarelo,
       palavras de outro assunto. A etiqueta é calculada na hora por listas de palavras e não é
       gravada. Clique no título para abrir a reclamação original e no texto para expandi-lo.</p>
+    <p><b>Busca ativa</b> (sem nome de produto): em Busca &amp; coleta, colete com termos gerais
+      (ex.: “prótese mamária rompeu”, “glicosímetro erro”) sem escolher produto. Aqui, filtre por
+      <b>Triagem</b> (possível evento adverso, possível queixa técnica, problema comercial, sem
+      sinal) e por <b>Produto</b>. O produto só aparece quando o matching já o associou a um
+      produto cadastrado; caso contrário a reclamação fica como <i>produto não identificado</i>
+      e continua listada. Se a leitura revelar o produto, cadastre-o (ou acrescente o termo) e
+      rode o matching: o par entra na Auditoria para validação.</p>
   </section>
 
   <section class="panel tutorial">
@@ -543,7 +638,11 @@
         <b>Categoria</b> e clique em <b>Aplicar</b>.</li>
       <li>Leia a <b>evidência</b>: o trecho da reclamação e o termo que gerou o par.</li>
       <li>Decida com <b>Confirmar</b>, <b>Possível</b> ou <b>Descartar</b>. A nota é opcional e
-        fica registrada junto com seu nome e o horário.</li>
+        fica registrada junto com seu nome e o horário. Use <b>Possível</b> quando a reclamação
+        cita o produto mas não permite saber qual versão é (a fabricante tem mais de um tipo do
+        mesmo produto base).</li>
+      <li>O item decidido sai da lista de pendentes; consulte-o em <b>Avaliações já
+        validadas</b>, no fim da aba.</li>
     </ol>
     <p>Cada item mostra a decisão automática e, se houver, a humana, além do método, do score e
       da versão do motor. A decisão humana prevalece e é mantida quando o matching é
@@ -567,8 +666,11 @@
       <li>Clique em <b>Aplicar</b>; <b>Limpar</b> volta ao padrão.</li>
     </ol>
     <p>Os cartões resumem produtos, reclamações, correspondências vigentes, pendências humanas e
-      buscas. Abaixo ficam a variação, a evolução temporal (todas × confirmadas), os produtos mais
-      citados e as reclamações por situação na fonte. Todos os números são contados pelo banco.
+      buscas. Abaixo ficam a variação, a evolução temporal (todas × confirmadas), a concentração
+      por produto (Pareto, com percentual acumulado), as reclamações por situação na fonte, a
+      triagem da ocorrência (a mesma da aba Reclamações: indício por palavras, não classificação
+      validada) e a qualidade do matching (decisão automática × revisão humana). Todos os números
+      são contados pelo banco.
       Os filtros ficam no endereço da página, então o link pode ser salvo ou compartilhado.</p>
   </section>
 </main>
@@ -722,6 +824,93 @@ function renderOverview(overview) {
   renderCards(overview);
   renderCategories(overview.products.by_category);
   renderStatus(overview.complaints.by_status);
+  renderQuality(overview.matches);
+}
+
+// Situação como o Reclame Aqui a grava; o banco guarda o código original.
+const STATUS_LABELS = {
+  PENDING: "Não respondida", ANSWERED: "Respondida", SOLVED: "Resolvida", NOT_SOLVED: "Não resolvida",
+};
+
+function statusLabel(status) {
+  if (!status) return "sem situação informada";
+  return STATUS_LABELS[status] || `${status} (código da fonte)`;
+}
+
+const DECISION_LABELS = { confirmed: "confirmado", possible: "dúvida", discarded: "descartado" };
+
+function ratio(part, whole) {
+  if (!whole) return "—";
+  return `${(100 * part / whole).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
+}
+
+function scrollable(table) {
+  const box = el("div");
+  box.className = "scroll";
+  box.append(table);
+  return box;
+}
+
+function kpi(value, label) {
+  const box = el("div");
+  box.className = "kpi";
+  box.append(el("b", value), el("span", label));
+  return box;
+}
+
+function renderQuality(m, container = document.getElementById("quality")) {
+  const reviewed = m.review.reduce((sum, row) => sum + row.pairs, 0);
+  const byHuman = (human) => m.review
+    .filter((row) => row.human === human).reduce((sum, row) => sum + row.pairs, 0);
+  const cell = (auto, human) => (m.review
+    .find((row) => row.automatic === auto && row.human === human) || { pairs: 0 }).pairs;
+  const confirmed = byHuman("confirmed");
+  const falsePositives = cell("confirmed", "discarded");
+
+  const wrap = el("div");
+  const kpis = el("div");
+  kpis.className = "kpis";
+  kpis.append(
+    kpi(`${num(reviewed)} / ${num(m.current)}`, "pares vigentes revisados"),
+    kpi(num(confirmed), "confirmados na revisão"),
+    kpi(num(byHuman("discarded")), "rejeitados na revisão"),
+    kpi(num(byHuman("possible")), "em dúvida (ambíguos)"),
+    kpi(ratio(confirmed, reviewed), "taxa de confirmação"),
+    kpi(m.precision === null ? "—" : ratio(m.precision, 1), "precisão da confirmação automática"),
+    kpi(num(falsePositives), "falsos positivos (confirmado → rejeitado)"),
+  );
+  wrap.append(kpis);
+
+  if (reviewed) {
+    const humans = ["confirmed", "possible", "discarded"];
+    const autos = [...new Set(m.review.map((row) => row.automatic))];
+    const table = el("table");
+      table.append(headRow([
+      ["decisão automática ↓ / revisão →", ""],
+      ...humans.map((human) => [DECISION_LABELS[human], "num"]),
+    ]));
+    const body = el("tbody");
+    for (const auto of autos) {
+      const tr = el("tr");
+      tr.append(el("td", DECISION_LABELS[auto]));
+      for (const human of humans) {
+        tr.append(Object.assign(el("td", num(cell(auto, human))), { className: "num" }));
+      }
+      body.append(tr);
+    }
+    table.append(body);
+    wrap.append(scrollable(table));
+  }
+
+  const notes = [
+    "Conta só pares vigentes com revisão humana. Taxa de confirmação: confirmados na revisão sobre revisados.",
+    m.precision === null
+      ? "Precisão não exibida: há confirmação automática ainda sem revisão no recorte (amostra parcial) ou nenhuma foi julgada."
+      : "Precisão: confirmações automáticas mantidas pelo revisor sobre as mantidas mais as rejeitadas; a dúvida humana fica fora.",
+    "Recall, F1 e falsos negativos não são exibidos: o motor não grava par que não propôs, então o que ele deixou passar não está no banco.",
+  ];
+  for (const text of notes) wrap.append(Object.assign(el("div", text), { className: "note" }));
+  show(container, wrap);
 }
 
 function renderCards(overview) {
@@ -784,8 +973,7 @@ function renderCategories(rows) {
   container.append(panel);
 }
 
-function renderStatus(rows) {
-  const container = document.getElementById("status");
+function renderStatus(rows, container = document.getElementById("status")) {
   if (!rows.length) {
     show(container, stateNode("Nenhuma reclamação no recorte."));
     return;
@@ -795,7 +983,9 @@ function renderStatus(rows) {
   const body = el("tbody");
   for (const row of rows) {
     const tr = el("tr");
-    tr.append(el("td", row.status || "sem situação informada"));
+    const label = el("td", statusLabel(row.status));
+    if (row.status) label.title = `código na fonte: ${row.status}`;
+    tr.append(label);
     tr.append(Object.assign(el("td", num(row.complaints)), { className: "num" }));
     const cell = el("td");
     const bar = el("div");
@@ -809,42 +999,156 @@ function renderStatus(rows) {
   show(container, table);
 }
 
+// Máximo da API: o Pareto precisa de todos os produtos citados para o acumulado fechar.
+const PARETO_LIMIT = 100;
+
+function renderNatures(result) {
+  const container = document.getElementById("natures");
+  if (!result.total) {
+    show(container, stateNode("Nenhuma reclamação no recorte."));
+    return;
+  }
+  const table = el("table");
+  const body = el("tbody");
+  for (const [key, label] of Object.entries(NATURE_LABELS)) {
+    const count = result.counts[key] || 0;
+    const tr = el("tr");
+    tr.append(el("td", label));
+    tr.append(Object.assign(el("td", num(count)), { className: "num" }));
+    tr.append(Object.assign(el("td", ratio(count, result.total)), { className: "num" }));
+    const cell = el("td");
+    const bar = el("div");
+    bar.className = "bar";
+    bar.style.width = `${Math.round((100 * count) / result.total)}%`;
+    cell.append(bar);
+    tr.append(cell);
+    body.append(tr);
+  }
+  table.append(body);
+  const wrap = el("div");
+  wrap.append(table);
+  wrap.append(Object.assign(el("div",
+    `Indício por vocabulário (regras ${result.rules_version}), não classificação validada. `
+    + "Cada reclamação entra em uma só linha: evento adverso pesa mais que defeito, e defeito "
+    + "mais que queixa de venda. É a mesma triagem da aba Reclamações."),
+  { className: "note" }));
+  show(container, wrap);
+}
+
 function renderTop(rows) {
   const container = document.getElementById("top");
   if (!rows.length) {
     show(container, stateNode("Nenhum produto com correspondência vigente no recorte."));
     return;
   }
-  const max = Math.max(...rows.map((row) => row.complaints));
+  // A API já devolve do mais citado para o menos citado. Base do acumulado: soma das
+  // citações — reclamação que cita dois produtos conta uma vez para cada um.
+  const total = rows.reduce((sum, row) => sum + row.complaints, 0);
+  let running = 0;
+  const cumulative = rows.map((row) => (running += row.complaints) / total);
+
+  const wrap = el("div");
+  wrap.append(paretoChart(rows, cumulative));
+  const legend = el("div");
+  legend.className = "legend";
+  for (const [color, text] of [
+    ["var(--chart-2)", "reclamações associadas ao produto"],
+    ["var(--warn)", "% acumulado das citações (tracejado: 80%)"],
+  ]) {
+    const item = el("span");
+    const swatch = el("span");
+    swatch.className = "swatch";
+    swatch.style.background = color;
+    item.append(swatch, document.createTextNode(text));
+    legend.append(item);
+  }
+  wrap.append(legend);
+
   const table = el("table");
   table.append(headRow([
     ["produto", ""], ["marca", ""], ["subcategoria", ""],
-    ["reclamações", "num"], ["confirmadas", "num"], ["possíveis", "num"],
-    ["pendentes", "num"], ["", ""],
+    ["reclamações", "num"], ["% das citações", "num"], ["% acumulado", "num"],
+    ["confirmadas", "num"], ["possíveis", "num"], ["pendentes", "num"],
   ]));
   const body = el("tbody");
-  for (const row of rows) {
+  rows.forEach((row, index) => {
     const tr = el("tr");
     tr.append(el("td", row.name));
     tr.append(el("td", row.brand || "—"));
-    tr.append(el("td", row.subcategory || row.category));
-    for (const value of [row.complaints, row.confirmed, row.possible, row.pending]) {
-      tr.append(Object.assign(el("td", num(value)), { className: "num" }));
+    tr.append(el("td", row.subcategory ? areaLabel(row.subcategory) : categoryLabel(row.category)));
+    for (const value of [
+      num(row.complaints), ratio(row.complaints, total), ratio(cumulative[index], 1),
+      num(row.confirmed), num(row.possible), num(row.pending),
+    ]) {
+      tr.append(Object.assign(el("td", value), { className: "num" }));
     }
-    const cell = el("td");
-    const bar = el("div");
-    bar.className = "bar";
-    bar.style.width = `${Math.round((100 * row.complaints) / max)}%`;
-    cell.append(bar);
-    tr.append(cell);
     body.append(tr);
-  }
+  });
   table.append(body);
-  show(container, table);
+  wrap.append(scrollable(table));
+  if (rows.length === PARETO_LIMIT) {
+    wrap.append(Object.assign(
+      el("div", `Só os ${PARETO_LIMIT} produtos mais citados: o acumulado não inclui os demais.`),
+      { className: "note" },
+    ));
+  }
+  show(container, wrap);
 }
 
-function renderTimeline(timeline) {
-  const container = document.getElementById("timeline");
+function paretoChart(rows, cumulative) {
+  const width = 900;
+  const height = 260;
+  const pad = { top: 12, right: 44, bottom: 40, left: 40 };
+  const plotW = width - pad.left - pad.right;
+  const plotH = height - pad.top - pad.bottom;
+  const max = Math.max(...rows.map((row) => row.complaints), 1);
+  const slot = plotW / rows.length;
+  const barW = Math.max(4, Math.min(slot * 0.7, 56));
+  const chart = svg("svg", {
+    class: "chart", viewBox: `0 0 ${width} ${height}`, role: "img",
+    "aria-label": "Reclamações por produto, do mais citado ao menos citado, com percentual acumulado",
+  });
+  const text = (attrs, content) => {
+    const node = svg("text", { class: "axis", "font-size": "11", ...attrs });
+    node.textContent = content;
+    return node;
+  };
+  for (let i = 0; i <= 2; i += 1) {
+    const y = pad.top + (plotH * i) / 2;
+    chart.append(svg("line", { x1: pad.left, x2: width - pad.right, y1: y, y2: y, class: "grid" }));
+    chart.append(text({ x: pad.left - 8, y: y + 4, "text-anchor": "end" },
+      Math.round((max * (2 - i)) / 2).toLocaleString("pt-BR")));
+    chart.append(text({ x: width - pad.right + 8, y: y + 4 }, `${100 - 50 * i}%`));
+  }
+  const y80 = pad.top + plotH * 0.2;
+  chart.append(svg("line", { x1: pad.left, x2: width - pad.right, y1: y80, y2: y80, class: "reference" }));
+  // Rótulo cabe no espaço da barra: nome cortado, completo no título e na tabela.
+  const chars = Math.max(4, Math.floor(slot / 6.5));
+  const points = [];
+  rows.forEach((row, index) => {
+    const cx = pad.left + slot * index + slot / 2;
+    const h = (plotH * row.complaints) / max;
+    const bar = svg("rect", {
+      x: cx - barW / 2, y: pad.top + plotH - h, width: barW, height: h, class: "confirmed", rx: 3,
+    });
+    const tip = svg("title");
+    tip.textContent = `${row.name}: ${row.complaints.toLocaleString("pt-BR")} reclamação(ões),`
+      + ` ${ratio(cumulative[index], 1)} acumulado`;
+    bar.append(tip);
+    chart.append(bar);
+    const name = row.name.length > chars ? `${row.name.slice(0, chars - 1)}…` : row.name;
+    chart.append(text({ x: cx, y: height - 22, "text-anchor": "middle" }, name));
+    chart.append(text({ x: cx, y: height - 8, "text-anchor": "middle" }, num(row.complaints)));
+    points.push([cx, pad.top + plotH * (1 - cumulative[index])]);
+  });
+  chart.append(svg("polyline", {
+    points: points.map(([x, y]) => `${x},${y}`).join(" "), class: "cumulative",
+  }));
+  for (const [x, y] of points) chart.append(svg("circle", { cx: x, cy: y, r: 3.5, class: "cumulative-dot" }));
+  return chart;
+}
+
+function renderTimeline(timeline, container = document.getElementById("timeline")) {
   const buckets = timeline.buckets;
   if (!buckets.length) {
     const empty = el("div");
@@ -920,7 +1224,8 @@ function renderTimeline(timeline) {
     legend.append(item);
   }
   wrap.append(legend);
-  const note = el("div", `Passo: ${timeline.granularity}. Sem data na fonte, fora da série: ${num(timeline.undated)}.`);
+  const step = { month: "mês", week: "semana", day: "dia" }[timeline.granularity] || timeline.granularity;
+  const note = el("div", `Passo: ${step}. Sem data na fonte, fora da série: ${num(timeline.undated)}.`);
   note.className = "note";
   wrap.append(note);
   show(container, wrap);
@@ -976,14 +1281,12 @@ document.getElementById("f-category").addEventListener("change", (event) => {
 });
 
 async function loadOverview(cards, scope) {
-  const status = document.getElementById("status");
-  show(cards, stateNode("Carregando…"));
-  show(status, stateNode("Carregando…"));
+  const panels = [cards, document.getElementById("status"), document.getElementById("quality")];
+  for (const panel of panels) show(panel, stateNode("Carregando…"));
   try {
     renderOverview(await get("/dashboard/overview", scope));
   } catch (error) {
-    show(cards, stateNode(error.message, true));
-    show(status, stateNode(error.message, true));
+    for (const panel of panels) show(panel, stateNode(error.message, true));
   }
 }
 
@@ -1019,9 +1322,10 @@ async function loadAll() {
       () => get("/dashboard/timeline", timelineParams),
       renderTimeline,
     ),
+    loadPanel(document.getElementById("natures"), () => get("/dashboard/natures", scope), renderNatures),
     loadPanel(
       document.getElementById("top"),
-      () => get("/dashboard/top-products", new URLSearchParams([...scope, ["limit", "10"]])),
+      () => get("/dashboard/top-products", new URLSearchParams([...scope, ["limit", String(PARETO_LIMIT)]])),
       renderTop,
     ),
   ]);
@@ -1045,6 +1349,13 @@ const RELEVANCE_GROUPS = [
   ["fora_do_assunto", "Provavelmente fora do assunto"],
 ];
 
+const NATURE_LABELS = {
+  possivel_evento_adverso: "possível evento adverso",
+  possivel_queixa_tecnica: "possível queixa técnica",
+  problema_comercial: "problema comercial",
+  sem_sinal: "sem sinal de triagem",
+};
+
 function tagNode(text, cls) {
   const node = el("span", text);
   node.className = `tag ${cls}`;
@@ -1065,7 +1376,15 @@ function complaintNode(item) {
   ));
   const tags = el("div");
   tags.className = "tags";
+  tags.append(tagNode(NATURE_LABELS[item.nature], item.nature === "sem_sinal" ? "flat" : "warn"));
+  if (!item.products.length) tags.append(tagNode("produto não identificado", "flat"));
+  for (const p of item.products) {
+    const who = p.human ? "revisor" : "automático";
+    tags.append(tagNode(`produto: ${p.name} (${DECISION_LABELS[p.decision]}, ${who}, score ${p.score.toFixed(2)})`, "ok"));
+  }
   for (const term of item.adverse_signals) tags.append(tagNode(`sinal: ${term}`, "bad"));
+  for (const term of item.technical_signals) tags.append(tagNode(`defeito: ${term}`, "warn"));
+  for (const term of item.commercial_signals) tags.append(tagNode(`comercial: ${term}`, "flat"));
   for (const term of item.context_terms) tags.append(tagNode(term, "ok"));
   for (const term of item.off_topic_terms) tags.append(tagNode(`outro assunto: ${term}`, "warn"));
   if (tags.childElementCount) node.append(tags);
@@ -1095,6 +1414,8 @@ function renderResearch(result) {
     ["duvidosas", num(result.counts.duvidosa)],
     ["provavelmente fora do assunto", num(result.counts.fora_do_assunto)],
     ["com sinal de evento adverso", num(result.adverse)],
+    ...Object.entries(NATURE_LABELS).map(([key, label]) => [`triagem: ${label}`, num(result.natures[key])]),
+    ["produto não identificado", num(result.unidentified)],
   ];
   if (result.date_from || result.date_to) {
     rows.push(["sem data na fonte (fora do período)", num(result.undated_excluded)]);
@@ -1108,7 +1429,7 @@ function renderResearch(result) {
   if (result.area) basis = areaLabel(result.area);
   else if (result.category) basis = `a área mais próxima dentro de ${categoryLabel(result.category)}`;
   summary.append(Object.assign(
-    el("div", `Etiqueta calculada contra: ${basis}. Regras ${result.rules_version}.`),
+    el("div", `Etiqueta calculada contra: ${basis}. Regras ${result.rules_version}.` + " Contagens sobre o resultado filtrado: com Triagem ou Produto escolhidos, o que ficou fora conta zero."),
     { className: "note" },
   ));
   if (result.truncated) {
@@ -1142,6 +1463,7 @@ async function runResearch() {
   const fields = [
     ["term", "r-term"], ["category", "r-category"], ["area", "r-area"],
     ["date_from", "r-from"], ["date_to", "r-to"],
+    ["nature", "r-nature"], ["identified", "r-identified"],
   ];
   for (const [key, id] of fields) {
     const value = document.getElementById(id).value.trim();
@@ -1397,6 +1719,8 @@ function renderProducts() {
     tr.append(el("td", product.search_terms.join(", ") || "(usa o nome)"));
     tr.append(el("td", product.active ? "ativo" : "inativo"));
     const cell = el("td");
+    cell.style.whiteSpace = "nowrap";
+    cell.append(smallButton("Ver monitoramento", () => openMonitor(product.id)), " ");
     const action = product.active ? "deactivate" : "activate";
     cell.append(smallButton(product.active ? "desativar" : "ativar", async (event) => {
       const state = document.getElementById("p-list-state");
@@ -1469,7 +1793,9 @@ const DECISIONS = {
 const AUDIT_PAGE = 50;
 const REVIEWER_KEY = "rapm.reviewer";
 let auditOffset = 0;
+let auditScope = "pending";
 let auditReady = false;
+let validatedOffset = 0;
 
 function reviewerName() {
   return document.getElementById("a-reviewer").value.trim();
@@ -1591,7 +1917,18 @@ function auditNode(entry) {
         status, reviewed_by: reviewer, note: noteInput.value.trim() || null,
       });
       rememberReviewer();
-      node.replaceWith(auditNode({ ...entry, match: updated }));
+      if (auditScope === "pending") {
+        // Decidido sai da fila de pendentes; fica consultável em "Avaliações já validadas".
+        const list = node.parentElement;
+        node.remove();
+        auditOffset -= 1;
+        if (!list.querySelector(".item") && !list.querySelector(".more")) {
+          show(document.getElementById("a-results"), stateNode("Nenhum candidato pendente de revisão no filtro."));
+        }
+        refreshValidated();
+      } else {
+        node.replaceWith(auditNode({ ...entry, match: updated }));
+      }
     } catch (error) {
       show(feedback, stateNode(error.message, true));
       for (const button of actions.querySelectorAll("button")) button.disabled = false;
@@ -1620,18 +1957,24 @@ function auditNode(entry) {
   return node;
 }
 
-async function loadQueue(reset) {
-  const container = document.getElementById("a-results");
-  const scope = document.getElementById("a-scope").value;
-  if (reset) {
-    auditOffset = 0;
-    show(container, stateNode("Carregando…"));
-  }
-  const params = new URLSearchParams({ scope, limit: String(AUDIT_PAGE), offset: String(auditOffset) });
+function auditParams(scope, offset) {
+  const params = new URLSearchParams({ scope, limit: String(AUDIT_PAGE), offset: String(offset) });
   for (const [key, id] of [["product_id", "a-product"], ["category", "a-category"]]) {
     const value = document.getElementById(id).value;
     if (value) params.set(key, value);
   }
+  return params;
+}
+
+async function loadQueue(reset) {
+  const container = document.getElementById("a-results");
+  if (reset) {
+    auditOffset = 0;
+    auditScope = document.getElementById("a-scope").value;
+    show(container, stateNode("Carregando…"));
+  }
+  const scope = auditScope;
+  const params = auditParams(scope, auditOffset);
   try {
     const entries = await get("/matches/queue", params);
     if (reset && !entries.length) {
@@ -1661,10 +2004,244 @@ async function loadQueue(reset) {
   }
 }
 
+function validatedRow(entry) {
+  const { match, product, complaint } = entry;
+  const tr = el("tr");
+  tr.append(el("td", isoMoment(match.reviewed_at)));
+  tr.append(el("td", product.model ? `${productLabel(product)} · ${product.model}` : productLabel(product)));
+  const link = el("td");
+  link.append(sourceLink(complaint.url, complaint.title));
+  tr.append(link);
+  const decision = el("td");
+  decision.append(decisionTag("humana", match.reviewed_status));
+  tr.append(decision);
+  tr.append(el("td", match.reviewed_by));
+  tr.append(el("td", match.review_note || ""));
+  return tr;
+}
+
+async function loadValidated(reset) {
+  const container = document.getElementById("a-validated-results");
+  if (reset) {
+    validatedOffset = 0;
+    show(container, stateNode("Carregando…"));
+  }
+  try {
+    const entries = await get("/matches/queue", auditParams("reviewed", validatedOffset));
+    if (reset && !entries.length) {
+      show(container, stateNode("Nenhuma avaliação humana registrada no filtro."));
+      return;
+    }
+    let body = container.querySelector("tbody");
+    if (reset || !body) {
+      const table = el("table");
+      table.append(headRow([
+        ["validado em", ""], ["produto", ""], ["reclamação", ""], ["classificação", ""],
+        ["revisor", ""], ["nota", ""],
+      ]));
+      body = el("tbody");
+      table.append(body);
+      show(container, table);
+    }
+    const more = container.querySelector(".more");
+    if (more) more.remove();
+    for (const entry of entries) body.append(validatedRow(entry));
+    validatedOffset += entries.length;
+    if (entries.length === AUDIT_PAGE) {
+      const wrap = el("div");
+      wrap.className = "actions more";
+      wrap.append(smallButton("Carregar mais", () => loadValidated(false), true));
+      container.append(wrap);
+    }
+  } catch (error) {
+    show(container, stateNode(error.message, true));
+  }
+}
+
+function refreshValidated() {
+  if (document.getElementById("a-validated").open) loadValidated(true);
+}
+
+document.getElementById("a-validated").addEventListener("toggle", refreshValidated);
+
 document.getElementById("audit-form").addEventListener("submit", (event) => {
   event.preventDefault();
   rememberReviewer();
   loadQueue(true);
+  refreshValidated();
+});
+
+// ------------------------------------------------------------ monitoramento do produto
+
+// Tudo aqui vem de rotas que já existem, filtradas por `product_id`: cadastro, métricas do
+// dashboard e fila de revisão com `scope=all`. Nenhum número é calculado no navegador.
+let monitorProductId = null;
+let monitorOffset = 0;
+
+function renderMonitorIdent(product) {
+  document.getElementById("m-title").textContent = productLabel(product);
+  const list = el("dl");
+  const rows = [
+    ["nome", product.name],
+    ["marca", product.brand || "—"],
+    ["fabricante", product.manufacturer || "—"],
+    ["modelo", product.model || "—"],
+    ["categoria", categoryLabel(product.category)],
+    ["área", product.subcategory ? areaLabel(product.subcategory) : "—"],
+    ["registro Anvisa", product.regulatory_id || "—"],
+    ["termos de busca", product.search_terms.join(", ") || "(usa o nome)"],
+    ["apelidos", product.aliases.join(", ") || "—"],
+    ["monitoramento", product.active ? "ativo" : "inativo (fora do matching)"],
+    ["cadastrado em", isoMoment(product.created_at)],
+  ];
+  for (const [label, value] of rows) {
+    list.append(el("dt", label));
+    list.append(el("dd", value));
+  }
+  show(document.getElementById("m-ident"), list);
+}
+
+function renderMonitorOverview(overview) {
+  const c = overview.complaints;
+  const m = overview.matches;
+  const s = overview.searches;
+  document.getElementById("m-cards").replaceChildren(
+    card("Reclamações associadas", c.total, [
+      ["confirmadas", num(m.confirmed)],
+      ["possíveis", num(m.possible)],
+      ["sem data na fonte", num(c.undated)],
+      ["publicação mais antiga", isoDate(c.first_published)],
+      ["publicação mais recente", isoDate(c.last_published)],
+    ]),
+    card("Aguardando validação", m.pending, [
+      ["rejeitadas (descartadas)", num(m.discarded)],
+      ["já validadas por humano", num(m.reviewed)],
+    ]),
+    card("Candidatos gerados", m.total, [
+      ["vigentes", num(m.current)],
+      ["confirmados", num(m.confirmed)],
+      ["dúvida (possíveis)", num(m.possible)],
+      ["rejeitados (descartados)", num(m.discarded)],
+      ["obsoletos (sem evidência)", num(m.stale)],
+    ]),
+    card("Buscas do produto", s.runs, [
+      ["concluídas", num(s.completed)],
+      ["falhas", num(s.failed)],
+      ["reclamações inseridas", num(s.inserted)],
+      ["última execução", isoMoment(s.last_run_at)],
+    ]),
+  );
+  renderStatus(c.by_status, document.getElementById("m-status"));
+}
+
+function monitorRow(entry) {
+  const { match, complaint } = entry;
+  const tr = el("tr");
+  tr.append(el("td", complaint.published_at ? isoDate(complaint.published_at) : "sem data"));
+  tr.append(el("td", complaint.title));
+  tr.append(el("td", match.evidence));
+  tr.append(el("td", complaint.source));
+  const decision = el("td");
+  // `decision` vem do backend: a humana quando existe, a automática caso contrário.
+  const [label, cls] = DECISIONS[match.decision] || [match.decision, ""];
+  decision.append(tagNode(label, cls));
+  tr.append(decision);
+  const auto = el("td");
+  auto.append(decisionTag("automática", match.status), " ", tagNode(`${match.method} · ${num(match.score)}`, ""));
+  if (match.stale_since) auto.append(" ", tagNode(`obsoleto desde ${isoDate(match.stale_since)}`, "warn"));
+  tr.append(auto);
+  const human = el("td");
+  if (match.reviewed_status) {
+    human.append(decisionTag("humana", match.reviewed_status));
+    human.append(el("div", `${match.reviewed_by} · ${isoMoment(match.reviewed_at)}`));
+  } else {
+    human.textContent = "—";
+  }
+  tr.append(human);
+  const link = el("td");
+  link.append(sourceLink(complaint.url, "abrir"));
+  tr.append(link);
+  return tr;
+}
+
+async function loadMonitorComplaints(reset) {
+  const productId = monitorProductId;
+  const container = document.getElementById("m-complaints");
+  if (reset) {
+    monitorOffset = 0;
+    show(container, stateNode("Carregando…"));
+  }
+  const params = new URLSearchParams({
+    product_id: String(productId), scope: "all", limit: String(AUDIT_PAGE), offset: String(monitorOffset),
+  });
+  try {
+    const entries = await get("/matches/queue", params);
+    // Outro produto foi aberto enquanto esta página carregava.
+    if (productId !== monitorProductId) return;
+    if (reset && !entries.length) {
+      show(container, stateNode("Nenhuma reclamação associada a este produto pelo matching."));
+      return;
+    }
+    let body = container.querySelector("tbody");
+    if (reset || !body) {
+      const table = el("table");
+      table.append(headRow([
+        ["publicação", ""], ["título", ""], ["trecho (evidência)", ""], ["fonte", ""],
+        ["classificação", ""], ["matching", ""], ["validação humana", ""], ["original", ""],
+      ]));
+      body = el("tbody");
+      table.append(body);
+      show(container, table);
+    }
+    const more = container.querySelector(".more");
+    if (more) more.remove();
+    for (const entry of entries) body.append(monitorRow(entry));
+    monitorOffset += entries.length;
+    if (entries.length === AUDIT_PAGE) {
+      const wrap = el("div");
+      wrap.className = "actions more";
+      wrap.append(smallButton("Carregar mais", () => loadMonitorComplaints(false), true));
+      container.append(wrap);
+    }
+  } catch (error) {
+    show(container, stateNode(error.message, true));
+  }
+}
+
+async function openMonitor(productId) {
+  monitorProductId = productId;
+  showTab("produto");
+  window.scrollTo(0, 0);
+  document.getElementById("m-title").textContent = "Produto";
+  const scope = new URLSearchParams({ product_id: String(productId) });
+  const timelineParams = new URLSearchParams([...scope, ["granularity", "month"]]);
+  // Resposta que chega depois de outro produto ter sido aberto é descartada.
+  async function panel(ids, fetcher, render) {
+    const containers = ids.map((id) => document.getElementById(id));
+    for (const container of containers) show(container, stateNode("Carregando…"));
+    try {
+      const data = await fetcher();
+      if (productId === monitorProductId) render(data);
+    } catch (error) {
+      if (productId !== monitorProductId) return;
+      for (const container of containers) show(container, stateNode(error.message, true));
+    }
+  }
+  await Promise.all([
+    panel(["m-cards", "m-status"], () => get("/dashboard/overview", scope), renderMonitorOverview),
+    panel(["m-ident"], () => get(`/products/${productId}`), renderMonitorIdent),
+    panel(
+      ["m-timeline"],
+      () => get("/dashboard/timeline", timelineParams),
+      (timeline) => renderTimeline(timeline, document.getElementById("m-timeline")),
+    ),
+    loadMonitorComplaints(true),
+  ]);
+}
+
+document.getElementById("m-back").addEventListener("click", () => {
+  showTab("coleta");
+  document.getElementById("p-list").scrollIntoView();
 });
 
 // ---------------------------------------------------------------------------- abas

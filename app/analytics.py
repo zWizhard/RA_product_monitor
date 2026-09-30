@@ -23,6 +23,7 @@ do fenômeno quando é só o recorte da coleta.
 
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta
 from math import comb
@@ -37,8 +38,10 @@ from app.models import (
     DashboardOverview,
     Granularity,
     MatchMetrics,
+    NatureDistribution,
     ProductComplaintCount,
     ProductMetrics,
+    ReviewCount,
     SearchMetrics,
     StatusCount,
     Timeline,
@@ -46,6 +49,7 @@ from app.models import (
     Trend,
     TrendWindow,
 )
+from app.relevance import NATURE_ORDER, RULES_VERSION, classify
 from app.repository import utc_now
 from app.taxonomy import Category, canonical_subcategory
 
@@ -298,6 +302,26 @@ class AnalyticsRepository:
                 """,
                 params,
             ).fetchone()
+            # Decisão automática × humana dos pares vigentes; humana nula = não revisado.
+            crossed = conn.execute(
+                f"""
+                SELECT m.status, m.reviewed_status, count(*)
+                FROM product_complaint_match m
+                JOIN product p ON p.id = m.product_id
+                JOIN complaint c ON c.id = m.complaint_id
+                WHERE {' AND '.join([*conditions, current])}
+                GROUP BY 1, 2 ORDER BY 1, 2
+                """,
+                params,
+            ).fetchall()
+        review = [
+            ReviewCount(automatic=MatchStatus(auto), human=MatchStatus(human), pairs=pairs)
+            for auto, human, pairs in crossed
+            if human is not None
+        ]
+        unreviewed_confirmed = any(
+            auto == MatchStatus.CONFIRMED and human is None for auto, human, _ in crossed
+        )
         return MatchMetrics(
             total=row[0],
             current=row[1],
@@ -307,6 +331,8 @@ class AnalyticsRepository:
             discarded=row[5],
             reviewed=row[6],
             pending=row[7],
+            review=review,
+            precision=None if unreviewed_confirmed else _precision(review),
         )
 
     @staticmethod
@@ -388,6 +414,29 @@ class AnalyticsRepository:
             )
             for row in rows
         ]
+
+    # ------------------------------------------------------------------ triagem
+
+    def natures(self, filters: DashboardFilters) -> NatureDistribution:
+        """Triagem das reclamações do escopo, pela mesma regra da pesquisa.
+
+        Única métrica daqui que não é agregação SQL: a regra é vocabulário em Python
+        (`app.relevance.classify`) e não é gravada; aqui ela só é contada.
+        """
+        scope, params = filters.complaint_scope()
+        period = filters.period_sql("c.published_at")
+        with self._db.reading() as conn:
+            rows = conn.execute(
+                f"SELECT c.title, c.description FROM complaint c WHERE {scope} AND {period}",
+                params,
+            ).fetchall()
+        found = Counter(classify(title, description).nature for title, description in rows)
+        return NatureDistribution(
+            filters=filters.echo(),
+            rules_version=RULES_VERSION,
+            total=len(rows),
+            counts={key: found[key] for key in NATURE_ORDER},
+        )
 
     # ------------------------------------------------------------ série temporal
 
@@ -545,6 +594,16 @@ class AnalyticsRepository:
             f" AND r.started_at < {_midnight(end + timedelta(days=1))}",
             params,
         ).fetchone()[0]
+
+
+def _precision(review: list[ReviewCount]) -> float | None:
+    """Confirmação automática mantida pelo revisor, sem contar a dúvida humana."""
+    kept = {
+        row.human: row.pairs for row in review if row.automatic is MatchStatus.CONFIRMED
+    }
+    true_pos = kept.get(MatchStatus.CONFIRMED, 0)
+    judged = true_pos + kept.get(MatchStatus.DISCARDED, 0)
+    return None if judged == 0 else round(true_pos / judged, 3)
 
 
 def _step(day: date, granularity: Granularity) -> date:

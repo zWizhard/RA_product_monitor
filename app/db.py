@@ -238,6 +238,34 @@ MIGRATIONS: tuple[tuple[int, tuple[str, ...]], ...] = (
             " stale_reason VARCHAR",
         ),
     ),
+    (
+        8,
+        (
+            # Execução do monitoramento periódico (`app.monitor`): coleta de todos os
+            # produtos ativos, matching e relatório. Cada termo continua com o seu
+            # `search_run`; esta linha é o registro da rotina como um todo.
+            "CREATE SEQUENCE IF NOT EXISTS monitor_run_id_seq START 1",
+            """
+            CREATE TABLE IF NOT EXISTS monitor_run (
+                id                BIGINT PRIMARY KEY DEFAULT nextval('monitor_run_id_seq'),
+                source            VARCHAR NOT NULL,
+                status            VARCHAR NOT NULL
+                                  CHECK (status IN ('running', 'completed', 'partial', 'failed')),
+                period_start      TIMESTAMP NOT NULL,  -- UTC, início do período do relatório
+                period_end        TIMESTAMP NOT NULL,  -- UTC, fim (exclusivo)
+                products_searched INTEGER NOT NULL DEFAULT 0,
+                search_runs       INTEGER NOT NULL DEFAULT 0,
+                collected         INTEGER NOT NULL DEFAULT 0,
+                inserted          INTEGER NOT NULL DEFAULT 0,
+                errors            VARCHAR NOT NULL DEFAULT '[]',  -- JSON: o que falhou
+                details           VARCHAR NOT NULL DEFAULT '[]',  -- JSON: resultado por produto
+                report_path       VARCHAR,
+                started_at        TIMESTAMP NOT NULL,  -- UTC
+                finished_at       TIMESTAMP            -- UTC
+            )
+            """,
+        ),
+    ),
 )
 
 SCHEMA_VERSION = str(MIGRATIONS[-1][0])

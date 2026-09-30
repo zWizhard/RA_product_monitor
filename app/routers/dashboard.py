@@ -17,6 +17,7 @@ from app.analytics import AnalyticsRepository, DashboardFilters
 from app.models import (
     DashboardOverview,
     Granularity,
+    NatureDistribution,
     ProductComplaintCount,
     Timeline,
     Trend,
@@ -76,6 +77,12 @@ def top_products(
 ) -> list[ProductComplaintCount]:
     """Produtos mais citados no escopo, por reclamações distintas associadas a eles."""
     return repo.top_products(filters, limit=limit)
+
+
+@router.get("/natures", response_model=NatureDistribution)
+def natures(repo: Repo, filters: Filters) -> NatureDistribution:
+    """Reclamações do escopo pela triagem por sinais (indício, não classificação)."""
+    return repo.natures(filters)
 
 
 @router.get("/timeline", response_model=Timeline)

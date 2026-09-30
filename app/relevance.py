@@ -11,6 +11,10 @@ Etiquetas:
 - `fora_do_assunto`: não cita a área e cita outro assunto — ou, com área/categoria
   escolhida, só cita vocabulário de outra área.
 
+Triagem da busca ativa (independe da área e do produto): `nature` diz que tipo de
+relato os sinais sugerem — possível evento adverso, possível queixa técnica, problema
+comercial ou sem sinal. É indício para leitura, nunca classificação final.
+
 O vocabulário é rascunho a revisar com o uso. Mudou lista ou regra, muda
 `RULES_VERSION`: a versão vai em toda resposta.
 """
@@ -23,7 +27,7 @@ from functools import lru_cache
 from app.normalization import normalize_text
 from app.taxonomy import CATEGORY_CONTEXT_TERMS, Category
 
-RULES_VERSION = "rel-2"
+RULES_VERSION = "rel-4"
 
 RELEVANT = "relevante"
 DOUBTFUL = "duvidosa"
@@ -173,6 +177,36 @@ ADVERSE_SIGNALS = (
 )
 
 
+# Defeito ou mau funcionamento do próprio produto, sem citar dano à pessoa.
+TECHNICAL_SIGNALS = (
+    "defeito", "defeituoso", "defeituosa", "quebrou", "quebrado", "quebrada",
+    "parou de funcionar", "não funciona", "não funcionou", "não liga", "não ligou",
+    "desligando", "travou", "travando",
+    # "falha" sozinha pega "falha na entrega/no atendimento": só com o objeto do defeito.
+    "falha no aparelho", "falha do aparelho", "falha no equipamento", "falha no sensor",
+    "falha do sensor", "falha na leitura", "falha de leitura", "falha na medição",
+    "aparelho falhou", "sensor falhou", "aparelho falhando", "sensor falhando",
+    "mau funcionamento", "mal funcionamento", "deu erro", "dá erro", "código de erro",
+    "mensagem de erro", "apresentou erro", "resultado errado", "resultado incorreto",
+    "resultados diferentes", "leitura errada", "leitura incorreta", "medição errada",
+    "valores diferentes", "valor diferente", "descalibrado", "vazou", "vazamento",
+    "soltou", "descolou", "trincou", "rachou", "superaquecendo", "superaqueceu",
+    "perdeu o sinal", "não conecta", "não pareia",
+)
+# Compra, entrega e cobrança: reclamação sobre a venda, não sobre o produto.
+COMMERCIAL_SIGNALS = (
+    "entrega", "não chegou", "não recebi", "atraso na entrega", "prazo de entrega",
+    "reembolso", "estorno", "devolução do dinheiro", "cancelamento", "cancelar o pedido",
+    "cobrança", "cobrança indevida", "nota fiscal", "frete", "pedido", "rastreio",
+)
+
+ADVERSE = "possivel_evento_adverso"
+TECHNICAL = "possivel_queixa_tecnica"
+COMMERCIAL = "problema_comercial"
+NO_SIGNAL = "sem_sinal"
+NATURE_ORDER = (ADVERSE, TECHNICAL, COMMERCIAL, NO_SIGNAL)
+
+
 @dataclass(frozen=True)
 class Relevance:
     label: str
@@ -180,6 +214,17 @@ class Relevance:
     context_terms: tuple[str, ...]
     off_topic_terms: tuple[str, ...]
     adverse_signals: tuple[str, ...]
+    technical_signals: tuple[str, ...] = ()
+    commercial_signals: tuple[str, ...] = ()
+
+    @property
+    def nature(self) -> str:
+        """Dano à pessoa pesa mais que defeito, e defeito mais que queixa de venda."""
+        if self.adverse_signals:
+            return ADVERSE
+        if self.technical_signals:
+            return TECHNICAL
+        return COMMERCIAL if self.commercial_signals else NO_SIGNAL
 
 
 @lru_cache(maxsize=None)
@@ -247,4 +292,6 @@ def classify(
         context_terms=context,
         off_topic_terms=off,
         adverse_signals=adverse,
+        technical_signals=_found(padded, TECHNICAL_SIGNALS),
+        commercial_signals=_found(padded, COMMERCIAL_SIGNALS),
     )

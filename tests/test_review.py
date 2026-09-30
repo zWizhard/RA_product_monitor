@@ -83,7 +83,7 @@ def test_decisao_humana_tira_da_fila_sem_apagar_a_automatica(db, decision):
     assert reviewed.explanation == before.explanation
 
 
-def test_analista_pode_manter_em_duvida_e_o_par_continua_na_fila(db):
+def test_duvida_humana_e_decisao_final_e_sai_da_fila(db):
     make_product(db)
     make_possible(db)
     run_matching(db, MatchRequest())
@@ -95,8 +95,10 @@ def test_analista_pode_manter_em_duvida_e_o_par_continua_na_fila(db):
     )
 
     assert reviewed.reviewed_status is MatchStatus.POSSIBLE
-    assert reviewed.pending is True
-    assert [item.match.id for item in repository.queue()] == [match_id]
+    assert reviewed.decision is MatchStatus.POSSIBLE
+    assert reviewed.pending is False
+    assert repository.queue() == []
+    assert [i.match.id for i in repository.queue(pending=None, reviewed=True)] == [match_id]
 
 
 def test_revisao_seguinte_substitui_a_anterior(db):
@@ -232,6 +234,23 @@ def test_fila_esconde_o_que_foi_decidido_e_o_reexame_recupera(db):
     assert repository.list(pending=True) == []
 
 
+def test_fila_de_validadas_traz_so_decisao_humana_da_mais_recente(db):
+    make_product(db)
+    for slug in ("c1", "c2", "c3"):
+        make_possible(db, slug)
+    run_matching(db, MatchRequest())
+    repository = MatchRepository(db)
+    primeiro, segundo, _ = [item.match.id for item in repository.queue()]
+
+    repository.review(primeiro, status=MatchStatus.CONFIRMED, reviewed_by="analista", note=None)
+    repository.review(segundo, status=MatchStatus.DISCARDED, reviewed_by="analista", note=None)
+
+    validadas = repository.queue(pending=None, reviewed=True)
+    assert [i.match.id for i in validadas] == [segundo, primeiro]
+    assert all(i.match.reviewed_status is not None for i in validadas)
+    assert len(repository.queue()) == 1
+
+
 # ------------------------------------------------------- fonte original intacta
 
 
@@ -304,9 +323,12 @@ def test_api_fluxo_de_validacao_humana(client):
         match_id
     ]
     # O reexame do que já foi decidido continua acessível pela mesma rota.
-    for scope in ("decided", "all"):
+    for scope in ("decided", "all", "reviewed"):
         decididos = client.get("/matches/queue", params={"scope": scope}).json()
         assert [i["match"]["id"] for i in decididos] == [match_id]
+    validada = client.get("/matches/queue", params={"scope": "reviewed"}).json()[0]
+    assert validada["match"]["reviewed_status"] == "confirmed"
+    assert validada["match"]["reviewed_at"] is not None
 
 
 def test_api_fila_rejeita_filtro_fora_do_vocabulario(client):

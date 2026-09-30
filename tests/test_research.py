@@ -6,9 +6,18 @@ import pytest
 
 from app.collect_repository import ComplaintRepository
 from app.collector import FetchResult
-from app.relevance import DOUBTFUL, OFF_TOPIC, RELEVANT, classify
+from app.relevance import (
+    ADVERSE,
+    COMMERCIAL,
+    DOUBTFUL,
+    NO_SIGNAL,
+    OFF_TOPIC,
+    RELEVANT,
+    TECHNICAL,
+    classify,
+)
 from app.taxonomy import Category
-from tests.helpers import make_complaint
+from tests.helpers import make_complaint, make_possible
 from tests.test_collect import FakeCollector, raw_item
 
 # ------------------------------------------------------------------------ etiqueta
@@ -66,6 +75,19 @@ def test_termo_so_conta_como_palavra_inteira():
     assert result.label == OFF_TOPIC
 
 
+def test_triagem_por_sinais_sem_depender_de_produto():
+    assert classify("Aparelho parou de funcionar", "Dá erro ao ligar.").nature == TECHNICAL
+    assert classify("Pedido não chegou", "Quero reembolso.").nature == COMMERCIAL
+    # Dano à pessoa pesa mais que defeito e que queixa de venda.
+    both = classify("Prótese com defeito", "Rompeu e tive infecção; o frete atrasou.")
+    assert both.nature == ADVERSE
+    assert "defeito" in both.technical_signals and "frete" in both.commercial_signals
+    assert classify("Atendimento ruim", "Ninguém responde.").nature == NO_SIGNAL
+    # "Falha" da venda não é defeito do produto.
+    assert classify("Falha na entrega", "O pedido atrasou.").nature == COMMERCIAL
+    assert classify("Sensor falhou", "No segundo dia.").nature == TECHNICAL
+
+
 def test_area_desconhecida_levanta():
     with pytest.raises(KeyError):
         classify("x", None, "inexistente")
@@ -110,7 +132,7 @@ def test_api_une_busca_e_texto_e_ordena_por_etiqueta(client):
     assert body["total"] == 2
     assert [item["relevance"] for item in body["items"]] == [RELEVANT, OFF_TOPIC]
     assert body["counts"] == {RELEVANT: 1, DOUBTFUL: 0, OFF_TOPIC: 1}
-    assert body["rules_version"] == "rel-2"
+    assert body["rules_version"] == "rel-4"
     assert body["items"][0]["complaint"]["url"].startswith("https://")
 
 
@@ -171,3 +193,42 @@ def test_pagina_tem_as_quatro_abas(client):
     page = client.get("/").text
     for tab in ("coleta", "reclamacoes", "dashboard", "auditoria"):
         assert f'data-tab="{tab}"' in page
+
+
+def test_api_busca_ativa_separa_triagem_e_produto_identificado(client):
+    db = client.app.state.db
+    client.post(
+        "/products",
+        json={
+            "name": "Ultraformer III",
+            "category": "equipamentos",
+            "subcategory": "estetica",
+            "brand": "Classys",
+            "model": "MPT",
+        },
+    )
+    make_possible(db, "a1")  # o matching associa ao produto cadastrado
+    make_complaint(db, "b1", title="Aparelho de estética quebrou", description="Parou de funcionar.")
+    make_complaint(db, "c1", title="Pedido não chegou", description="Quero reembolso.")
+    client.post("/matches/run", json={})
+
+    body = client.get("/research").json()
+    assert body["total"] == 3 and body["unidentified"] == 2
+    assert body["natures"][TECHNICAL] == 1 and body["natures"][COMMERCIAL] == 1
+    by_title = {item["complaint"]["title"]: item for item in body["items"]}
+    [product] = by_title["Aparelho da Classys"]["products"]
+    assert (product["name"], product["decision"], product["human"]) == (
+        "Ultraformer III", "possible", False,
+    )
+    # Sem produto identificado continua listada, com a origem rastreável.
+    unknown = by_title["Aparelho de estética quebrou"]
+    assert unknown["products"] == [] and unknown["nature"] == TECHNICAL
+    assert unknown["complaint"]["url"].startswith("https://")
+
+    only_unknown = client.get("/research", params={"identified": "false"}).json()
+    assert {i["complaint"]["title"] for i in only_unknown["items"]} == {
+        "Aparelho de estética quebrou", "Pedido não chegou",
+    }
+    technical = client.get("/research", params={"nature": TECHNICAL}).json()
+    assert [i["complaint"]["title"] for i in technical["items"]] == ["Aparelho de estética quebrou"]
+    assert client.get("/research", params={"nature": "nada"}).status_code == 422

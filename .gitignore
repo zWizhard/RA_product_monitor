@@ -18,6 +18,7 @@ __pycache__/
 *.db
 logs/
 tmp/
+data/reports/
 
 # Claude local/pessoal
 CLAUDE.local.md

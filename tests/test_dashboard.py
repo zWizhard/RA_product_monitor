@@ -200,6 +200,59 @@ def test_metricas_seguem_a_decisao_humana(db, decision, confirmed, discarded, li
     assert overview.complaints.linked == linked
 
 
+def test_qualidade_cruza_decisao_automatica_e_humana_e_so_da_precisao_com_cobertura(db):
+    make_product(db)
+    seed_confirmed(db, "c1")
+    seed_confirmed(db, "c2")
+    make_possible(db, "poss")
+    run_matching(db, MatchRequest())
+    repository = MatchRepository(db)
+    by_status = {}
+    for match in repository.list():
+        by_status.setdefault(match.status, []).append(match.id)
+    c1, c2 = by_status[MatchStatus.CONFIRMED]
+    (possivel,) = by_status[MatchStatus.POSSIBLE]
+
+    repository.review(c1, status=MatchStatus.CONFIRMED, reviewed_by="analista", note=None)
+    repository.review(possivel, status=MatchStatus.CONFIRMED, reviewed_by="analista", note=None)
+    parcial = metrics(db).overview(ALL).matches
+    # Um confirmado automático ainda sem revisão: amostra parcial não dá precisão.
+    assert parcial.precision is None
+    assert {(r.automatic, r.human, r.pairs) for r in parcial.review} == {
+        (MatchStatus.CONFIRMED, MatchStatus.CONFIRMED, 1),
+        (MatchStatus.POSSIBLE, MatchStatus.CONFIRMED, 1),
+    }
+
+    repository.review(c2, status=MatchStatus.DISCARDED, reviewed_by="analista", note=None)
+    completa = metrics(db).overview(ALL).matches
+    # Confirmado pela revisão sobre confirmado + descartado, só entre os automáticos.
+    assert completa.precision == 0.5
+
+
+def test_triagem_conta_reclamacoes_do_escopo_pela_regra_da_pesquisa(client):
+    db = client.app.state.db
+    produto = make_product(db)
+    seed_confirmed(db, "conf")
+    make_complaint(
+        db, "tec", title="Ultraformer III parou de funcionar", description="Não liga mais."
+    )
+    make_complaint(db, "com", title="Cobrança indevida na fatura", description="Sem produto.")
+    run_matching(db, MatchRequest())
+
+    todas = client.get("/dashboard/natures").json()
+    assert todas["total"] == 3
+    assert sum(todas["counts"].values()) == 3
+    assert todas["counts"]["possivel_evento_adverso"] == 1  # "queimadura"
+    assert todas["counts"]["possivel_queixa_tecnica"] == 1
+    assert todas["counts"]["problema_comercial"] == 1
+    assert todas["rules_version"]
+
+    # Com produto, só entra reclamação associada a ele: a de cobrança sai.
+    do_produto = client.get("/dashboard/natures", params={"product_id": produto.id}).json()
+    assert do_produto["total"] == 2
+    assert do_produto["counts"]["problema_comercial"] == 0
+
+
 def test_overview_conta_buscas_pela_data_de_execucao(db):
     vazio = metrics(db).overview(ALL)
     assert (vazio.searches.runs, vazio.searches.inserted) == (0, 0)
@@ -490,6 +543,50 @@ def test_api_expoe_metricas_do_escopo(client):
     assert trend["days"] == 30
     assert trend["direction"] is None
     assert trend["significant"] is False
+
+
+def test_api_monitoramento_de_um_produto_so_traz_o_que_e_dele(client):
+    """As rotas que a página "Ver monitoramento" compõe, filtradas por um produto."""
+    db = client.app.state.db
+    produto = make_product(db)
+    make_product(
+        db,
+        name="Accu-Chek Guide",
+        category="diagnostico_in_vitro",
+        subcategory="glicosimetro",
+        brand="Roche",
+        model=None,
+        aliases=[],
+        search_terms=[],
+    )
+    seed_confirmed(db, "conf")
+    make_possible(db, "poss")
+    make_complaint(db, "glico", title="Accu-Chek Guide com erro de leitura")
+    run_matching(db, MatchRequest())
+    possivel = MatchRepository(db).list(product_id=produto.id, decision=MatchStatus.POSSIBLE)[0]
+    client.post(
+        f"/matches/{possivel.id}/review",
+        json={"status": "discarded", "reviewed_by": "analista", "note": None},
+    )
+    scope = {"product_id": produto.id}
+
+    assert client.get(f"/products/{produto.id}").json()["search_terms"] == [
+        "ultrassom microfocado"
+    ]
+
+    overview = client.get("/dashboard/overview", params=scope).json()
+    # Rejeitada na validação continua como candidato, mas não como reclamação do produto.
+    assert overview["complaints"]["total"] == 1
+    assert overview["matches"]["total"] == 2
+    assert (overview["matches"]["confirmed"], overview["matches"]["discarded"]) == (1, 1)
+    assert (overview["matches"]["pending"], overview["matches"]["reviewed"]) == (0, 1)
+
+    timeline = client.get("/dashboard/timeline", params=scope).json()
+    assert sum(b["complaints"] for b in timeline["buckets"]) + timeline["undated"] == 1
+
+    itens = client.get("/matches/queue", params={**scope, "scope": "all"}).json()
+    assert {i["product"]["id"] for i in itens} == {produto.id}
+    assert sorted(i["match"]["decision"] for i in itens) == ["confirmed", "discarded"]
 
 
 def test_api_ecoa_o_escopo_aplicado(client):
